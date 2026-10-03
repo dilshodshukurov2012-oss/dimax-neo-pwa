@@ -2,7 +2,7 @@
 // VERSION меняет update_pwa.sh при каждом выпуске (номер версии + отпечаток index.html). Изменился sw.js →
 // браузер ставит новый воркер → новый кэш → старые кэши удаляются в activate. Поэтому новая версия не может
 // «застрять» за старым HTML.
-const VERSION = 'v26.57-18e2a01d';
+const VERSION = 'v26.58-59ebedcd';
 const CACHE = 'dimax-neo-shell-' + VERSION;
 const SHELL = ['./', 'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png',
   'icons/apple-touch-icon-180.png', 'icons/favicon-32.png', 'icons/favicon-16.png'];
