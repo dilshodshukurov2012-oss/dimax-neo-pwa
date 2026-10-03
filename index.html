@@ -109,6 +109,8 @@ h1,h2,h3,h4{margin:0;letter-spacing:-.015em}
 .tile.thumb{width:72px;height:72px;border-radius:16px;font-size:18px}
 .tile.thumb svg{width:30px;height:30px}
 .tile.thumb[data-zoom]{cursor:zoom-in}
+/* v26.62: продавцам фото нельзя скачать/скопировать/переслать долгим нажатием (меню браузера отключено) */
+html.noimgsave img,html.noimgsave .tile,html.noimgsave #pv{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-user-drag:none}
 /* v26.61: просмотр фото на весь экран (нажатие на фото) */
 #pv{position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.94);display:flex;align-items:center;justify-content:center;touch-action:none;opacity:0;transition:opacity .18s ease;overscroll-behavior:contain}
 #pv.on{opacity:1}
@@ -1147,7 +1149,13 @@ let SB=null;
 try{ SB=window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}}); }
 catch(e){ console.error('[DIMAX] supabase client init failed',e); }
 let BOOTING=true, RAW={}, RT=null, RT_DIRTY=false, RT_TIMER=null, RT_PENDING=new Set();
-const PHOTO_URLS={}; // storage path -> signed URL
+const PHOTO_URLS={}, PHOTO_AT={}; // ключ -> подписанная ссылка, ключ -> когда подписана
+// v26.62: фото товаров — закрытый бакет product-photos, показ по временным ссылкам (6 ч, обновляются через 3 ч).
+// В products.photo_path хранится ключ файла в бакете; старые публичные ссылки (v26.56–61) тоже понимаются.
+const PHOTO_TTL={'app-photos':60*60*24*7,'product-photos':60*60*6};
+const ppKey=v=>{ if(!v) return null; const m=String(v).match(/\/object\/(?:public|sign)\/product-photos\/([^?]+)/);
+  if(m) return decodeURIComponent(m[1]); if(/^https?:/.test(v)||/^(products|models|settings|firms)\//.test(v)) return null; return String(v); };
+const photoStale=k=>!PHOTO_URLS[k]||Date.now()-(PHOTO_AT[k]||0)>PHOTO_TTL[k.startsWith('pp:')?'product-photos':'app-photos']*500;
 const PREF_KEY='dimax_prefs_v1'; // язык/тема — настройка телефона, а не общая для всей компании
 function prefs(){ try{ return JSON.parse(localStorage.getItem(PREF_KEY)||'{}')||{}; }catch(e){ return {}; } }
 function setPref(k,v){ try{ const p=prefs(); p[k]=v; localStorage.setItem(PREF_KEY,JSON.stringify(p)); }catch(e){} }
@@ -1192,13 +1200,13 @@ async function sbAll(table){
   }
   return out;
 }
-async function signPhotos(paths){
-  const need=[...new Set(paths.filter(p=>p&&!PHOTO_URLS[p]))];
-  for(let i=0;i<need.length;i+=100){
-    const {data,error}=await SB.storage.from('app-photos').createSignedUrls(need.slice(i,i+100),60*60*24*7);
-    if(error){ console.warn('[DIMAX] photo urls',error); continue; }
-    (data||[]).forEach(d=>{ if(d.signedUrl) PHOTO_URLS[d.path]=d.signedUrl; });
-  }
+async function signPhotos(paths,ppKeys){
+  const sign=async(bucket,list,pref)=>{ const need=[...new Set(list.filter(p=>p&&photoStale(pref+p)))];
+    for(let i=0;i<need.length;i+=100){
+      const {data,error}=await SB.storage.from(bucket).createSignedUrls(need.slice(i,i+100),PHOTO_TTL[bucket]);
+      if(error){ console.warn('[DIMAX] photo urls',error); continue; }
+      (data||[]).forEach(d=>{ if(d.signedUrl){ PHOTO_URLS[pref+d.path]=d.signedUrl; PHOTO_AT[pref+d.path]=Date.now(); } }); } };
+  await sign('app-photos',paths||[],''); await sign('product-photos',ppKeys||[],'pp:');
 }
 // RAW (строки из Postgres по таблицам) -> DB прежней формы. Чистая функция: вызывается после любой перезагрузки.
 function buildDB(){
@@ -1211,7 +1219,7 @@ function buildDB(){
   settings.sign=s0.signPath?(PHOTO_URLS[s0.signPath]||''):''; settings.stamp=s0.stampPath?(PHOTO_URLS[s0.stampPath]||''):'';
   const pf=prefs(); settings.lang=pf.lang||s0.lang||'ru'; settings.theme=pf.theme||s0.theme||'auto';
   const photo=p=>p?(PHOTO_URLS[p]||''):'';
-  const products=R('products').map(r=>{const o=rowIn(r); o.kind='part'; o.photo=/^https?:\/\//.test(r.photo_path||'')?r.photo_path:photo(r.photo_path); o.cost=pc[r.id]?+pc[r.id].cost:0; o.purchaseUsd=pc[r.id]?+(pc[r.id].purchase_price_usd||0):0; return o;});
+  const products=R('products').map(r=>{const o=rowIn(r); o.kind='part'; { const k=ppKey(r.photo_path); o.photo=k?(PHOTO_URLS['pp:'+k]||''):photo(r.photo_path); } o.cost=pc[r.id]?+pc[r.id].cost:0; o.purchaseUsd=pc[r.id]?+(pc[r.id].purchase_price_usd||0):0; return o;});
   const models=R('models').map(r=>{const o=rowIn(r); o.kind='machine'; o.photo=photo(r.photo_path); o.cost=mc[r.id]?+mc[r.id].cost:0; return o;});
   const units=R('units').map(r=>{const o=rowIn(r); o.cost=uc[r.id]?+uc[r.id].cost:0; delete o.pid; return o;});
   const stock={}; R('stock').forEach(r=>{ stock[r.product_id+'_'+r.wh_id]=+r.qty||0; });
@@ -1239,10 +1247,11 @@ function emptyDB(){ RAW={}; buildDB(); }
 async function loadTables(list){
   const res=await Promise.all(list.map(tb=>sbAll(tb).then(rows=>[tb,rows])));
   res.forEach(([tb,rows])=>{ RAW[tb]=rows; });
-  const paths=[]; ['products','models'].forEach(tb=>(RAW[tb]||[]).forEach(r=>{ if(!/^https?:\/\//.test(r.photo_path||'')) paths.push(r.photo_path); }));
+  const paths=[], ppk=[]; (RAW.products||[]).forEach(r=>{ const k=ppKey(r.photo_path); if(k) ppk.push(k); else if(r.photo_path&&!/^https?:/.test(r.photo_path)) paths.push(r.photo_path); });
+  (RAW.models||[]).forEach(r=>paths.push(r.photo_path));
   (RAW.settings||[]).forEach(r=>{ paths.push(r.sign_path,r.stamp_path); });
   (RAW.firms||[]).forEach(r=>paths.push(r.req_photo_path));
-  await signPhotos(paths);
+  await signPhotos(paths,ppk);
   buildDB();
 }
 const loadRemote=()=>loadTables(TBL);
@@ -1371,9 +1380,8 @@ function compressProductPhoto(file){
     im.onerror=()=>{ URL.revokeObjectURL(url); reject(new Error(t('xlsxBadFile'))); };
     im.src=url; });
 }
-const productPhotoKey=u=>{ const m=String(u||'').match(/\/object\/public\/product-photos\/(.+)$/); return m?decodeURIComponent(m[1].split('?')[0]):null; };
 function removeProductPhotoFile(u){
-  const key=productPhotoKey(u);
+  const key=ppKey(u);
   if(key) SB.storage.from(PRODUCT_PHOTO_BUCKET).remove([key]).then(({error})=>{ if(error) console.warn('[DIMAX] photo remove',error); });
   else if(u&&!/^https?:/.test(u)) removePhoto(u); // старое фото из app-photos (v26.48)
 }
@@ -1387,7 +1395,7 @@ async function setProductPhoto(o,file){
       key=o.id+'/'+Date.now()+'.'+ext;
       const up=await SB.storage.from(PRODUCT_PHOTO_BUCKET).upload(key,blob,{contentType:blob.type||'image/jpeg',upsert:false});
       if(up.error) throw up.error;
-      newUrl=SB.storage.from(PRODUCT_PHOTO_BUCKET).getPublicUrl(key).data.publicUrl;
+      newUrl=key; // v26.62: в базе — ключ файла (бакет закрытый, показ по временной ссылке)
     }
     const {error}=await SB.from('products').update({photo_path:newUrl}).eq('id',o.id);
     if(error){ if(key) SB.storage.from(PRODUCT_PHOTO_BUCKET).remove([key]); throw error; }
@@ -5450,6 +5458,7 @@ function nav(){
   }).join('')}</div>`;
 }
 function render(){
+  document.documentElement.classList.toggle('noimgsave',!!(ME&&ME.role!=='admin')); // v26.62
   const app=document.getElementById('app');
   if(LOAD_CORRUPT_RAW){ app.innerHTML=screenCorruptRecovery(); return; }
   // overlays() вынесен отдельно и вызывается ОБА раза (и до входа, и после) — раньше ветка
@@ -6782,6 +6791,15 @@ boot();
   document.addEventListener('pointerup',function(e){ if(!dz) return; var d=dz; dz=null;
     if(Math.abs(e.clientX-d.x)+Math.abs(e.clientY-d.y)<10&&d.z.contains(e.target)) open(d.z.dataset.zoom,d.z.dataset.zoomCap||''); },true);
   document.addEventListener('keydown',function(e){ if(pv&&e.key==='Escape') close(); });
+  // v26.62: у продавцов долгое нажатие на фото не открывает меню «Скачать / Скопировать / Поделиться / Открыть в Chrome»
+  function noSave(e){ if(typeof ME==='undefined'||!ME||ME.role==='admin') return;
+    if(e.target.closest&&e.target.closest('img,.tile,#pv,[data-zoom]')){ e.preventDefault(); } }
+  document.addEventListener('contextmenu',noSave,true); document.addEventListener('dragstart',noSave,true);
+  // временные ссылки на фото: обновить заранее, если приложение открыто долго (проверка раз в 20 минут)
+  setInterval(function(){ if(typeof ME==='undefined'||!ME||typeof RAW==='undefined') return;
+    var ks=(RAW.products||[]).map(function(r){ return ppKey(r.photo_path); }).filter(Boolean);
+    if(!ks.some(function(k){ return photoStale('pp:'+k); })) return;
+    signPhotos([],ks).then(function(){ buildDB(); if(typing()) RT_DIRTY=true; else render(); }); },20*60*1000);
 })();
 </script>
 <script>
