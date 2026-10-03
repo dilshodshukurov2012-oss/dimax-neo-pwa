@@ -2733,7 +2733,7 @@ function screenStock(){
     // Списание — только Владелец (can('approve')). По прямому решению Владельца (2026-09) продавцам
     // эта кнопка больше не показывается вовсе: раньше менеджер мог отправить запрос на списание,
     // теперь списывать может только сам Владелец, напрямую и без подтверждения.
-    ...(can('approve')?[{ic:'alert',label:t('writeoff'),act:'op',op:'writeoff'}]:[])
+    // v26.63: «Списание» перенесено в «Ещё» (по решению владельца) — здесь кнопки больше нет
   ]:[
     // "Добавить машину" убрана отсюда (2026-09) — по тому же решению, что и "Приход" у запчастей:
     // приём техники теперь полностью живёт в "Ещё" → "Приходы" (см. sheetPurNewChoice — "Приход
@@ -2742,7 +2742,7 @@ function screenStock(){
     // один раз принятую не на тот склад, было бы физически невозможно перекинуть филиалу через приложение
     ...(visibleWh().length>1?[{ic:'truck',label:t('move'),act:'op',op:'transfer'}]:[]),
     // Списание техники (поломка/утеря) — только Владелец, см. комментарий выше про запчасти
-    ...(can('approve')?[{ic:'alert',label:t('writeoff'),act:'op',op:'writeoff'}]:[])
+    // v26.63: «Списание» перенесено в «Ещё» (по решению владельца) — здесь кнопки больше нет
   ])}
   ${body}`;
 }
@@ -2756,9 +2756,10 @@ function actionRow(items){
     </button>`).join('')}</div>`;
 }
 
-function sheetOp(op){
+function sheetOp(op,kind){
   const ttl={in:t('incoming'),transfer:t('move'),writeoff:t('writeoff')};
-  if((op==='transfer'||op==='writeoff')&&WTAB==='mach'){
+  const mach=kind?kind==='mach':WTAB==='mach'; // v26.63: kind передаётся из «Ещё → Списание»
+  if((op==='transfer'||op==='writeoff')&&mach){
     // Техника серийная — перемещаем/списываем конкретную единицу, а не количество; склад виден прямо
     // в названии единицы, отдельного поля "откуда" не нужно.
     const us=DB.units.filter(u=>activeUnit(u)&&visibleWh().some(w=>w.id===u.whId));
@@ -3605,6 +3606,7 @@ function screenMore(){
     {v:'sellers',ic:'users',t:t('sellersBtn'),s:'',need:'settings'},
     {v:'suppliers',ic:'truck',t:t('suppliers'),s:'',need:'cost'},
     {v:'purchases',ic:'box',t:t('purchases'),s:'',need:'cost'},
+    {act:'writeoffPick',ic:'alert',t:t('writeoff'),s:'',need:'approve'}, // v26.63: перенесено со «Склада»
     {v:'firms',ic:'inv',t:t('firmDir'),s:((DB.firms||[]).length||0)+''},
     // История инвентаризаций своего склада — не нужна online-only продавцу без своей точки
     // (см. hasPoint/togglePoint), у него больше нет физического склада, который можно пересчитывать.
@@ -3634,7 +3636,7 @@ function screenMore(){
       <button class="${th==='auto'?'on':''}" data-act="theme" data-v="auto" title="${t('auto')}">${ic('auto')}</button>
     </div>
   </div>
-  <div class="list" style="margin-top:10px">${its.filter(i=>!i.need||can(i.need)).map(i=>`<button class="row" data-act="go" data-v="${i.v}">
+  <div class="list" style="margin-top:10px">${its.filter(i=>!i.need||can(i.need)).map(i=>`<button class="row" data-act="${i.act||'go'}" data-v="${i.v||''}">
     <div class="tile">${ic(i.ic)}</div><div class="grow"><div class="t">${i.t}</div>${i.s?`<div class="s">${i.s}</div>`:''}</div>${ic('chev','chev')}</button>`).join('')}</div>
   <div class="btns" style="margin-top:22px"><button class="btn ghost" data-act="logout">${t('exit')}</button></div>`;
 }
@@ -4788,6 +4790,18 @@ function sheetImportResult(result){
 // техника" здесь больше нет (2026-09, по прямому решению Владельца) — она дублировала "+ Новая
 // модель", которая и так уже есть прямо внутри "Приход техники" (см. sheetPurchase, kind==='machine'),
 // когда поиск не находит нужную модель. Массовый приход через Excel остаётся ТОЛЬКО для запчастей.
+// v26.63: «Списание» из «Ещё» — сначала выбор, что списываем; дальше то же окно sheetOp('writeoff'), что было на «Складе»
+function sheetWriteoffChoice(){
+  return `<div class="sheet-hd"><h3>${t('writeoff')}</h3><button class="iconbtn" data-act="close">${ic('x')}</button></div>
+  <div class="list" style="margin-top:8px">
+    <button class="row" data-act="writeoffGo" data-v="parts">
+      <div class="tile">${ic('box')}</div>
+      <div class="grow"><div class="t">${t('parts')}</div></div>${ic('chev','chev')}</button>
+    <button class="row" data-act="writeoffGo" data-v="mach">
+      <div class="tile mach">${ic('tractor')}</div>
+      <div class="grow"><div class="t">${t('machines')}</div></div>${ic('chev','chev')}</button>
+  </div>`;
+}
 function sheetPurNewChoice(){
   return `<div class="sheet-hd"><h3>${t('purchase')}</h3><button class="iconbtn" data-act="close">${ic('x')}</button></div>
   <div class="list" style="margin-top:8px">
@@ -5958,6 +5972,8 @@ document.addEventListener('click',e=>{
     return;
   }
   if(a==='journal'){ SHEET=sheetJournal; render(); return; }
+  if(a==='writeoffPick'){ if(!can('approve')){ toast(t('noAccess')); return; } SHEET=sheetWriteoffChoice; render(); return; }
+  if(a==='writeoffGo'){ if(!can('approve')) return; const k=el.dataset.v==='mach'?'mach':'parts'; if(!SWH) SWH=ME.whId; SHEET=()=>sheetOp('writeoff',k); render(); return; }
   if(a==='op'){ const op=el.dataset.op;
     if(op==='in'){ if(!can('cost')){ toast(t('noAccess')); return; } PUR=newPur(); PUR.kind=el.dataset.kind||'parts'; PURQ=''; SHEET=sheetPurchase; render(); return; }
     if(op==='inv'){ INVSTEP='mach'; INVRESULT=[]; INVMISSING=[]; INVOVER=[]; SHEET=sheetInv; render(); return; }
