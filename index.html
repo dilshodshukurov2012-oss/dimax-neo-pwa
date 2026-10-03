@@ -2390,7 +2390,7 @@ function sheetDocs(m){
 }
 
 function sheetReceipt(s){
-  const ln=[DB.settings.company,DB.settings.phone,'',`${t('receipt')} №${s.number}`,dtstr(s.at),
+  const ln=[DB.settings.company,sellerContact(usr(s.userId))||DB.settings.phone,'',`${t('receipt')} №${s.number}`,dtstr(s.at),
     `${usr(s.userId)?.name||''} · ${whName(s.whId)}`, s.clientId?cli(s.clientId)?.name:'', '─'.repeat(30)].filter(Boolean);
   s.items.forEach(i=>{
     ln.push(`${i.article}  ${i.name}`);
@@ -2530,12 +2530,16 @@ function collectCard(){
   o.specs=sp;
   if(EDITCOST) document.querySelectorAll('[data-edc]').forEach(i=>{ EDITCOST[i.dataset.edc]=i.value; });
 }
+// v26.64: контакт в карточке товара и в чеке — продавец, который отправляет карточку / оформил продажу: имя и номер
+// из его анкеты. Владелец или продавец без номера — как раньше, общий номер компании из «Настроек».
+const fmtPhone=p=>{ const d=String(p||'').replace(/\D/g,''); return /^998\d{9}$/.test(d)?'+998 '+d.slice(3,5)+' '+d.slice(5,8)+' '+d.slice(8,10)+' '+d.slice(10):String(p||'').trim(); };
+const sellerContact=u=>(u&&u.role==='manager'&&String(u.phone||'').replace(/\D/g,'').length>=9)?t('seller')+': '+((u.name||'').trim()||u.login||'')+' · '+fmtPhone(u.phone):'';
 function cardText(o){
   const sp=(o.specs||[]).filter(x=>x.k&&x.v);
   return [pname(o), o.article?'('+o.article+')':'', '', descOf(o), '',
     sp.map(x=>'• '+x.k+': '+x.v).join('\n'), '',
     t('price')+': '+fmt(priceOf(o))+' '+t('sumCur'), '',
-    DB.settings.company+(DB.settings.phone?' · '+DB.settings.phone:'')].filter(x=>x!==undefined).join('\n').replace(/\n{3,}/g,'\n\n').trim();
+    sellerContact(ME)?DB.settings.company+'\n'+sellerContact(ME):DB.settings.company+(DB.settings.phone?' · '+DB.settings.phone:'')].filter(x=>x!==undefined).join('\n').replace(/\n{3,}/g,'\n\n').trim();
 }
 function shareCard(o){
   const txt=cardText(o);
