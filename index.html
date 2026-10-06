@@ -2182,7 +2182,7 @@ function sheetUnits(m){
   return `<div class="sheet-hd"><h3>${esc(pname(m))}</h3><button class="iconbtn" data-act="close">${ic('x')}</button></div>
   <div class="pad" style="color:var(--ink-3);font-size:13.5px">${t('pickUnit')} · ${fmt(priceOf(m))} ${t('sumCur')}${can('cost')?` ($${fmt(m.price)})`:''}</div>
   <div class="list">${list.length?list.map(u=>`<button class="row" data-act="addUnit" data-id="${u.id}">
-    <div class="tile mach">${ic('tractor')}</div>
+    ${machTile(m,false)}
     <div class="grow"><div class="t mono">${esc(u.serial)}</div><div class="s">${u.year} · ${esc(whName(u.whId))}</div></div>
     <div class="r">${statusPill(u.status)}</div></button>`).join(''):`<div class="empty">${t('noUnits')}</div>`}</div>`;
 }
@@ -2503,6 +2503,8 @@ function partRow(p){
     <div class="grow"><div class="t">${esc(pname(p))}</div><div class="s mono">${esc(p.article)} · ${esc(p.brand)}</div>${ds?`<div class="s" style="color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(ds)}</div>`:''}</div>
     <div class="r"><div class="t">${fmt(priceOf(p))}</div><div class="s"><span class="pill ${low?'warn':'ok'}">${q1} ${t('pcs')}</span></div></div></button>`;
 }
+// v26.65: плитка техники в строках единиц/моделей — фото модели (если есть), иначе значок трактора
+const machTile=(m,zoom)=>m?itemTile(m,'mach',zoom):`<div class="tile thumb mach">${ic('tractor')}</div>`;
 function itemTile(o,cls,zoom){
   return o.photo ? `<div class="tile thumb ${cls||''}" style="overflow:hidden;padding:0"${zoom===false?'':` data-zoom="${esc(o.photo)}" data-zoom-cap="${esc(pname(o)+(o.article?' · '+o.article:''))}"`}><img src="${esc(o.photo)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block"></div>`
     : `<div class="tile thumb ${cls||''}">${o.kind==='machine'||o.groupId?ic('tractor'):esc(String(o.article||'').split('-')[1]?String(o.article).split('-')[1].slice(0,2):String(o.article||'').slice(0,2))}</div>`;
@@ -2717,7 +2719,7 @@ function screenStock(){
     <div class="sec-t">${t('machines')}</div>
     <div class="list">${us.length?us.map(u=>{const m=modl(u.modelId);
       return `<button class="row" data-act="model" data-id="${u.modelId}">
-        <div class="tile mach">${ic('tractor')}</div>
+        ${machTile(m)}
         <div class="grow"><div class="t">${esc(pname(m))}</div><div class="s mono">${esc(u.serial)} · ${u.year}</div></div>
         <div class="r">${statusPill(u.status)}</div></button>`;}).join(''):`<div class="empty">${t('noUnits')}</div>`}</div>`;
   }
@@ -2820,7 +2822,7 @@ function sheetInvMach(){
   return `<div class="sheet-hd"><h3>${t('invent')}</h3><button class="iconbtn" data-act="close">${ic('x')}</button></div>
   <div class="pad" style="color:var(--ink-3);font-size:13.5px">${whName(SWH)} · ${t('invStepMach')}<br>${blind?t('invBlindHint'):(L==='ru'?'введите фактическое количество':'faktik sonini kiriting')}</div>
   <div class="list">${groups.map(x=>`<div class="row">
-    <div class="tile mach">${ic('tractor')}</div>
+    ${machTile(x.m)}
     <div class="grow"><div class="t">${esc(pname(x.m))}</div><div class="s mono">${esc(x.m.article)}${blind?'':' · '+t('sys')+' '+x.count}</div></div>
     <input class="inp num" style="width:82px;padding:8px" data-invm="${x.m.id}" inputmode="numeric" placeholder="0" value="${blind?'':x.count}"></div>`).join('')}</div>
   <div class="btns" style="margin-top:14px"><button class="btn sm" data-act="invNext">${t('invNext')}</button></div>`;
@@ -3188,7 +3190,7 @@ function sheetDocPick(type){
     <div class="pad" style="color:var(--ink-3);font-size:13px">${t('pickUnitG')}</div>
     <div class="list">${us.length?us.map(u=>{const m=modl(u.modelId), s=DB.sales.find(x=>x.id===u.saleId);
       return `<button class="row" data-act="docUnit" data-id="${u.id}">
-        <div class="tile mach">${ic('tractor')}</div>
+        ${machTile(m,false)}
         <div class="grow"><div class="t">${esc(pname(m))}</div><div class="s mono">${esc(u.serial)} · ${u.year}${s?' · '+dfmt(s.at):''}</div></div>
         ${ic('chev','chev')}</button>`;}).join(''):`<div class="empty">${t('nothing')}</div>`}</div>`;
   }
@@ -3680,7 +3682,7 @@ function sheetClient(c){
   </div>`:''}
   <div class="btns" style="padding-top:2px"><button class="btn ghost sm" data-act="clientEdit" data-id="${c.id}">✎ ${t('editCard')}</button></div>
   ${mach.length?`<div class="sec-t">${t('machines')}</div><div class="list">${mach.map(u=>{const m=modl(u.modelId);
-    return `<div class="row"><div class="tile mach">${ic('tractor')}</div>
+    return `<div class="row">${machTile(m)}
     <div class="grow"><div class="t">${esc(pname(m))}</div><div class="s mono">${esc(u.serial)} · ${u.year}</div></div></div>`;}).join('')}</div>`:''}
   ${c.debt?`<div class="fld" style="margin-top:14px"><label>${t('takePay')}</label><input class="inp num" id="paysum" inputmode="numeric" value="${DEBTPAY.amount}"></div>
   <div class="seg"><button class="${DEBTPAY.method==='cash'?'on':''}" data-act="debtPayM" data-v="cash">${t('pm_cash')}</button>
