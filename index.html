@@ -1234,7 +1234,7 @@ function buildDB(){
   const users=R('user_directory').map(r=>full[r.id]||rowIn(r));
   Object.values(full).forEach(u=>{ if(!users.some(x=>x.id===u.id)) users.push(u); });
   const firms=R('firms').map(r=>{const o=rowIn(r); Object.assign(o,o.extra||{}); delete o.extra; o.reqPhoto=photo(r.req_photo_path); return o;});
-  DB={settings, branches:R('branches').map(rowIn), warehouses:R('warehouses').map(rowIn), categories:R('categories').map(rowIn),
+  DB={settings, branches:R('branches').map(rowIn), warehouses:R('warehouses').map(rowIn), categories:R('categories').map(r=>{ const o=rowIn(r), k=ppKey(r.photo_path); o.photo=k?(PHOTO_URLS['pp:'+k]||''):''; return o; }),
     mgroups:R('mgroups').map(rowIn), models, units, products, stock, stockLots:R('stock_lots').map(rowIn), clients:R('clients').map(rowIn),
     users, suppliers:R('suppliers').map(rowIn), sales, moves:R('moves').map(rowIn).sort((a,b)=>b.at-a.at), payments:R('payments').map(rowIn),
     expenses:R('expenses').map(rowIn), pendings:R('pendings').map(rowIn), docs:R('docs').map(rowIn), firms, purchases,
@@ -1248,6 +1248,7 @@ async function loadTables(list){
   const res=await Promise.all(list.map(tb=>sbAll(tb).then(rows=>[tb,rows])));
   res.forEach(([tb,rows])=>{ RAW[tb]=rows; });
   const paths=[], ppk=[]; (RAW.products||[]).forEach(r=>{ const k=ppKey(r.photo_path); if(k) ppk.push(k); else if(r.photo_path&&!/^https?:/.test(r.photo_path)) paths.push(r.photo_path); });
+  (RAW.categories||[]).forEach(r=>{ const k=ppKey(r.photo_path); if(k) ppk.push(k); }); // v26.67: фото категорий
   (RAW.models||[]).forEach(r=>paths.push(r.photo_path));
   (RAW.settings||[]).forEach(r=>{ paths.push(r.sign_path,r.stamp_path); });
   (RAW.firms||[]).forEach(r=>paths.push(r.req_photo_path));
@@ -2146,7 +2147,7 @@ function screenSale(){
       rows=DB.categories.map(c=>{
         const cnt=DB.products.filter(p=>p.categoryId===c.id).length;
         return `<button class="row" data-act="s1" data-id="${c.id}">
-          <div class="tile">${ic('box')}</div>
+          ${catTile(c)}
           <div class="grow"><div class="t">${esc(c[L]||c.ru)}</div><div class="s">${cnt} ${t('catItemsCount')}</div></div>
           ${ic('chev','chev')}</button>`;
       }).join('')+(can('settings')?`<div class="btns" style="padding-top:10px"><button class="btn ghost sm" data-act="catMng">✎ ${t('categories')}</button></div>`:'');
@@ -2509,6 +2510,21 @@ function partRow(p){
 }
 // v26.65: плитка техники в строках единиц/моделей — фото модели (если есть), иначе значок трактора
 const machTile=(m,zoom)=>m?itemTile(m,'mach',zoom):`<div class="tile thumb mach">${ic('tractor')}</div>`;
+// v26.67: плитка категории 72 px — фото категории (загружает владелец в «Категориях») или кубик; нажатие открывает категорию
+const catTile=c=>c&&c.photo?`<div class="tile thumb" style="overflow:hidden;padding:0"><img src="${esc(c.photo)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block"></div>`:`<div class="tile thumb">${ic('box')}</div>`;
+async function setCategoryPhoto(c,file){
+  if(PHOTO_BUSY||!c) return; const old=c.photoPath||null; let key=null;
+  PHOTO_BUSY=true; render();
+  try{
+    if(file){ const blob=await compressProductPhoto(file); const ext=blob.type==='image/png'?'png':blob.type==='image/webp'?'webp':'jpg';
+      key='cat/'+c.id+'/'+Date.now()+'.'+ext;
+      const up=await SB.storage.from(PRODUCT_PHOTO_BUCKET).upload(key,blob,{contentType:blob.type||'image/jpeg',upsert:false}); if(up.error) throw up.error; }
+    const {error}=await SB.from('categories').update({photo_path:key}).eq('id',c.id);
+    if(error){ if(key) SB.storage.from(PRODUCT_PHOTO_BUCKET).remove([key]); throw error; }
+    if(old&&old!==key) removeProductPhotoFile(old);
+    PHOTO_BUSY=false; await refresh(['categories']); toast(t('saved'));
+  }catch(e){ PHOTO_BUSY=false; toastErr(e); render(); }
+}
 function itemTile(o,cls,zoom){
   return o.photo ? `<div class="tile thumb ${cls||''}" style="overflow:hidden;padding:0"${zoom===false?'':` data-zoom="${esc(o.photo)}" data-zoom-cap="${esc(pname(o)+(o.article?' · '+o.article:''))}"`}><img src="${esc(o.photo)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block"></div>`
     : `<div class="tile thumb ${cls||''}">${o.kind==='machine'||o.groupId?ic('tractor'):esc(String(o.article||'').split('-')[1]?String(o.article).split('-')[1].slice(0,2):String(o.article||'').slice(0,2))}</div>`;
@@ -2700,7 +2716,7 @@ function screenStock(){
         const items=DB.products.filter(p=>p.categoryId===c.id);
         const lowN=items.filter(p=>stockOf(p.id,SWH)<=p.minStock).length;
         return `<button class="row" data-act="sc1" data-id="${c.id}">
-          <div class="tile">${ic('box')}</div>
+          ${catTile(c)}
           <div class="grow"><div class="t">${esc(c[L]||c.ru)}</div><div class="s">${items.length} ${t('catItemsCount')}</div></div>
           ${lowN?`<span class="pill warn" style="flex:none">${lowN}</span>`:''}
           ${ic('chev','chev')}</button>`;
@@ -4076,8 +4092,14 @@ function sheetCategories(){
     return CATEDIT===c.id?`<div class="row" style="flex-wrap:wrap">
       <input class="inp" style="flex:1;padding:9px" data-ce="ru" placeholder="${t('catNameRu')}" value="${esc(c.ru)}">
       <input class="inp" style="flex:1;padding:9px" data-ce="uz" placeholder="${t('catNameUz')}" value="${esc(c.uz||'')}">
-      <button class="iconbtn" data-act="catSave" data-id="${c.id}">✓</button></div>`
+      <button class="iconbtn" data-act="catSave" data-id="${c.id}">✓</button>
+      <div style="flex:1 0 100%;display:flex;gap:12px;align-items:center;margin-top:10px">${catTile(c)}
+        <div style="display:flex;flex-direction:column;gap:8px;flex:1">
+          <label class="btn ghost sm" style="cursor:pointer${PHOTO_BUSY?';opacity:.6;pointer-events:none':''}">${PHOTO_BUSY?t('photoUploading'):ic('scan')+' '+t('photoChange')}<input type="file" accept="image/*" data-catphoto="${c.id}" style="display:none"></label>
+          ${c.photo&&!PHOTO_BUSY?`<button class="btn ghost sm" style="color:var(--bad)" data-act="catPhotoDel" data-id="${c.id}">${ic('x')} ${t('photoDelete')}</button>`:''}
+        </div></div></div>`
     :`<div class="row">
+      ${catTile(c)}
       <div class="grow"><div class="t">${esc(c[L]||c.ru)}</div><div class="s">${n} ${t('catItemsCount')}</div></div>
       <button class="iconbtn" data-act="catEdit" data-id="${c.id}">✎</button>
       <button class="iconbtn" data-act="catDel" data-id="${c.id}" style="color:var(--bad)">${ic('x')}</button></div>`;
@@ -6038,6 +6060,7 @@ document.addEventListener('click',e=>{
     PURQ=''; render(); return; }
   if(a==='purDel'){ PUR.items.splice(+el.dataset.i,1); render(); return; }
   if(a==='catMng'){ if(!can('settings')){ toast(t('noAccess')); return; } CATEDIT=null; SHEET=sheetCategories; render(); return; }
+  if(a==='catPhotoDel'){ if(!can('settings')) return; setCategoryPhoto(catRec(id),null); return; }
   if(a==='catEdit'){ if(!can('settings')) return; CATEDIT=id; render(); return; }
   if(a==='catSave'){ if(!can('settings')) return; const c=catRec(id); if(c){
       const ru=document.querySelector('[data-ce="ru"]'), uz=document.querySelector('[data-ce="uz"]');
@@ -6580,6 +6603,8 @@ document.addEventListener('change',e=>{
   const fp=e.target.closest('input[data-fphoto]');
   if(fp&&fp.files&&fp.files[0]){ const k=fp.dataset.fphoto;
     readPhoto(fp.files[0], url=>{ DOCF[k]=url; render(); toast(t('saved')); }); return; }
+  const cph=e.target.closest('input[data-catphoto]'); // v26.67: фото категории
+  if(cph&&cph.files&&cph.files[0]){ const f=cph.files[0], c=catRec(cph.dataset.catphoto); cph.value=''; if(can('settings')&&c) setCategoryPhoto(c,f); return; }
   const ip=e.target.closest('input[data-iphoto]');
   if(ip&&ip.files&&ip.files[0]){ collectCard();
     if(!can('settings')){ ip.value=''; return; }
@@ -6858,7 +6883,7 @@ boot();
   document.addEventListener('contextmenu',noSave,true); document.addEventListener('dragstart',noSave,true);
   // временные ссылки на фото: обновить заранее, если приложение открыто долго (проверка раз в 20 минут)
   setInterval(function(){ if(typeof ME==='undefined'||!ME||typeof RAW==='undefined') return;
-    var ks=(RAW.products||[]).map(function(r){ return ppKey(r.photo_path); }).filter(Boolean);
+    var ks=(RAW.products||[]).concat(RAW.categories||[]).map(function(r){ return ppKey(r.photo_path); }).filter(Boolean);
     if(!ks.some(function(k){ return photoStale('pp:'+k); })) return;
     signPhotos([],ks).then(function(){ buildDB(); if(typing()) RT_DIRTY=true; else render(); }); },20*60*1000);
 })();
