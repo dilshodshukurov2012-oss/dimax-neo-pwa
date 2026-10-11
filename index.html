@@ -919,7 +919,9 @@ uz:{
  remitNothingToSend:"Topshiradigan narsa yoʻq", remitHistoryTitle:"Tushum topshirishlari", remitNoneYet:"Hali topshirilmagan"
 }};
 let L = 'ru';
-const t = k => (T[L][k] || T.ru[k] || k);
+// Неизвестный ключ (например, docs.type или expenses.cat из БД) возвращается экранированным —
+// результат t() вставляется в innerHTML как доверенный текст (аудит: t-raw-key-fallback).
+const t = k => (T[L][k] || T.ru[k] || String(k==null?'':k).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])));
 
 /* ============ storage ============ */
 const KEY = 'sklad_demo_v7';
@@ -1183,10 +1185,10 @@ function rowIn(r){
   return o;
 }
 const TBL=['settings','branches','warehouses','categories','mgroups','products','models','units','stock','stock_lots',
-  'product_costs','model_costs','unit_costs','clients','suppliers','firms','users','user_directory','sales','sale_items',
+  'product_costs','model_costs','unit_costs','clients','suppliers','firms','users','user_directory','sales','sale_items','sale_docs',
   'sale_item_costs','sale_costs','purchases','purchase_items','moves','payments','expenses','pendings','docs','writeoffs',
   'inv_alerts','part_alerts','staff_debts','remits','inventories'];
-const KEYCOL={firms:'inn',product_costs:'product_id',model_costs:'model_id',unit_costs:'unit_id',sale_item_costs:'sale_item_id',sale_costs:'sale_id'};
+const KEYCOL={sale_docs:'sale_id',firms:'inn',product_costs:'product_id',model_costs:'model_id',unit_costs:'unit_id',sale_item_costs:'sale_item_id',sale_costs:'sale_id'};
 // PostgREST отдаёт не больше 1000 строк за запрос — читаем постранично, в стабильном порядке ключа
 async function sbAll(table){
   const key=KEYCOL[table]||'id';
@@ -1226,7 +1228,11 @@ function buildDB(){
   const itemsBy={}; R('sale_items').slice().sort((a,b)=>a.position-b.position).forEach(r=>{
     const o=rowIn(r); o.key=r.legacy_id||r.id; const c=sic[r.id]; if(c){ o.cost=+c.cost; o.lots=c.lots||[]; }
     (itemsBy[r.sale_id]=itemsBy[r.sale_id]||[]).push(o); });
-  const sales=R('sales').map(r=>{const o=rowIn(r); o.items=itemsBy[r.id]||[]; o.profit=sc[r.id]?+sc[r.id].profit:null; return o;}).sort((a,b)=>a.at-b.at);
+  // Личные данные покупателя лежат отдельно в sale_docs (видят только автор продажи и Владелец) —
+  // склеиваем их со служебными полями sales.docs по каждому способу оплаты (аудит: client-pii-copy).
+  const sdocs={}; R('sale_docs').forEach(r=>{ sdocs[r.sale_id]=r.docs||{}; });
+  const mergeDocs=(a,b)=>{ a=a||{}; b=b||{}; const o={}; new Set([...Object.keys(a),...Object.keys(b)]).forEach(m=>{ o[m]=Object.assign({},a[m]||{},b[m]||{}); }); return o; };
+  const sales=R('sales').map(r=>{const o=rowIn(r); o.docs=mergeDocs(o.docs,sdocs[r.id]); o.items=itemsBy[r.id]||[]; o.profit=sc[r.id]?+sc[r.id].profit:null; return o;}).sort((a,b)=>a.at-b.at);
   const pitemsBy={}; R('purchase_items').slice().sort((a,b)=>a.position-b.position).forEach(r=>{ (pitemsBy[r.purchase_id]=pitemsBy[r.purchase_id]||[]).push(rowIn(r)); });
   const purchases=R('purchases').map(r=>{const o=rowIn(r); o.items=pitemsBy[r.id]||[]; return o;}).sort((a,b)=>a.at-b.at);
   // пользователи: своя (у владельца — все) полная строка + справочник имён коллег без личных данных
@@ -1245,7 +1251,8 @@ function buildDB(){
 }
 function emptyDB(){ RAW={}; buildDB(); }
 async function loadTables(list){
-  const res=await Promise.all(list.map(tb=>sbAll(tb).then(rows=>[tb,rows])));
+  // sale_docs — новая таблица (аудит, 2026-10-11): если миграция ещё не применена, грузимся без неё, а не падаем.
+  const res=await Promise.all(list.map(tb=>sbAll(tb).catch(e=>{ if(tb==='sale_docs'){ console.warn('[DIMAX] sale_docs',e); return []; } throw e; }).then(rows=>[tb,rows])));
   res.forEach(([tb,rows])=>{ RAW[tb]=rows; });
   const paths=[], ppk=[]; (RAW.products||[]).forEach(r=>{ const k=ppKey(r.photo_path); if(k) ppk.push(k); else if(r.photo_path&&!/^https?:/.test(r.photo_path)) paths.push(r.photo_path); });
   (RAW.categories||[]).forEach(r=>{ const k=ppKey(r.photo_path); if(k) ppk.push(k); }); // v26.67: фото категорий
@@ -1589,6 +1596,8 @@ const can=k=>{const r=ME.role;
   // менеджеру доступно всё остальное: продажи, склад, долги, лизинг, возвраты, отчёты по выручке
   return true;};
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+// Фото/скан из jsonb: только data:image/* или https:, иначе не показываем (аудит: jsonb-docs-subfield)
+const safeImgSrc=u=>typeof u==='string'&&/^(data:image\/(png|jpe?g|webp|gif|heic);base64,|https:\/\/)/i.test(u);
 const dstr=ts=>new Date(ts).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'});
 const dtstr=ts=>new Date(ts).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
 const startOfDay=ts=>{const d=new Date(ts);d.setHours(0,0,0,0);return d.getTime();};
@@ -1959,7 +1968,7 @@ function screenHome(){
     if(leaseP||leaseR) blocks.push({v:'pendings', ic:'truck', label:t('pm_leasing'), pend:leaseP, done:leaseR});
     return `<div class="sec-t">${t('pendings')}</div>
     <div class="list">${blocks.map(b=>`<button class="row" data-act="go" data-v="${b.v}">
-      <div class="tile${b.img?' tile-img':''}">${b.img?`<img src="${b.img}" alt="">`:ic(b.ic)}</div>
+      <div class="tile${b.img?' tile-img':''}">${b.img?`<img src="${esc(b.img)}" alt="">`:ic(b.ic)}</div>
       <div class="grow"><div class="t">${b.label}</div>
         <div class="s" style="display:flex;gap:14px;margin-top:2px">
           <span>${t('waiting')}: <b class="mono" style="color:${b.pend?'var(--warn)':'var(--ink-3)'}">${short(b.pend)}</b></span>
@@ -2217,12 +2226,12 @@ function sheetCart(){
     return `<div class="row">
     ${tileObj?itemTile(tileObj,i.kind==='machine'?'mach':''):''}
     <div class="grow"><div class="t">${esc(i.name)}</div>
-      <div class="s mono">${i.kind==='machine'?esc(i.serial):esc(i.article)} · ${fmt(i.price)} × ${i.qty} = ${fmt(i.price*i.qty)}</div>
+      <div class="s mono">${i.kind==='machine'?esc(i.serial):esc(i.article)} · ${fmt(i.price)} × ${esc(i.qty)} = ${fmt(i.price*i.qty)}</div>
       ${i.kind==='part'&&i.whId!==ME.whId?`<div class="s">${esc(whName(i.whId))}</div>`:''}
       ${canExpand?`<button type="button" class="pill" style="margin-top:6px;border:0;cursor:pointer;background:var(--${chipClr}-soft);color:var(--${chipClr})" data-act="cartWhToggle" data-id="${i.key}">${i.kind==='part'?t('moreElsewhereHint'):t('addAnotherUnit')} (+${chipN}) ${expanded?'▲':'→'}</button>`:''}</div>
     ${i.kind==='machine'
       ? `<button class="iconbtn" data-act="delItem" data-id="${i.key}">${ic('x')}</button>`
-      : `<div class="qty"><button data-act="q-" data-id="${i.key}">−</button><input class="mono" value="${i.qty}" data-act="qset" data-id="${i.key}" inputmode="numeric"><button data-act="q+" data-id="${i.key}">+</button></div>`}
+      : `<div class="qty"><button data-act="q-" data-id="${i.key}">−</button><input class="mono" value="${esc(i.qty)}" data-act="qset" data-id="${i.key}" inputmode="numeric"><button data-act="q+" data-id="${i.key}">+</button></div>`}
   </div>
   ${expanded&&i.kind==='part'?`<div class="list" style="margin:-2px 0 10px;gap:6px">${otherWh.map(o=>{
       const need=i.wantExtra&&i.wantExtra>0?i.wantExtra:1;
@@ -2310,7 +2319,7 @@ function docFields(m){
     <input class="inp" type="${tp||'text'}" data-d="${k}" value="${esc((PAYDOCS[m]||{})[k]||'')}" placeholder="${ph||''}"></div>`;
   const PH=(k,lb,req)=>{const v=(PAYDOCS[m]||{})[k];
     return `<div class="fld"><label>${lb}${req===0?'':' <span style="color:var(--warn)">*</span>'}</label>
-    ${v?`<img src="${v}" style="width:100%;border-radius:10px;border:1px solid var(--line);display:block;margin-bottom:8px">`:''}
+    ${v?`<img src="${esc(v)}" style="width:100%;border-radius:10px;border:1px solid var(--line);display:block;margin-bottom:8px">`:''}
     <label class="btn ghost sm" style="cursor:pointer">${ic('scan')} ${t('takePhoto')}
       <input type="file" accept="image/*" capture="environment" data-photo="${k}" data-m="${m}" style="display:none"></label></div>`;};
   const buyer = `<div class="sec-t">${t('buyer')}</div>`+F('bFio',t('fio'),1)
@@ -2321,7 +2330,7 @@ function docFields(m){
     const isOwner=can('allBranches');
     const tgBlock = pd.photo ? `<div class="btns" style="padding-top:2px"><button class="btn ghost sm" data-act="cardShareTG">${ic('send')} ${t('sendReceiptTG')}</button></div>` : '';
     const reviewPhoto = pd.photo ? `<div class="pad" style="padding-top:0"><div style="font-size:11px;font-family:var(--m);letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);margin-bottom:6px">${t('receiptPhotoLbl')}</div>
-      <img src="${pd.photo}" style="width:100%;border-radius:10px;border:1px solid var(--line);display:block"></div>` : '';
+      <img src="${esc(pd.photo)}" style="width:100%;border-radius:10px;border:1px solid var(--line);display:block"></div>` : '';
     const confirmBlock = `<div class="sec-t">${t('cardConfirmSec')}</div>
       ${reviewPhoto}
       ${isOwner
@@ -2435,8 +2444,8 @@ function sheetReceipt(s){
       ${m==='smart'?`<span class="pill ${d.smartOk?'ok':'warn'}" style="margin-bottom:8px;display:inline-block">${d.smartOk?t('smartOk'):t('smartWait')}</span>`:''}
       ${Object.entries(d).filter(([k,v])=>v&&k!=='photo'&&k!=='scan'&&k!=='_docId'&&k!=='edoOk'&&k!=='cardOk'&&k!=='smartOk').map(([k,v])=>
         `<div style="display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:3px 0;border-bottom:1px solid var(--line-soft)">
-          <span style="color:var(--ink-3)">${lbl[k]||k}</span><span class="mono" style="text-align:right">${esc(v)}</span></div>`).join('')}
-      ${[['photo',d.photo],['scan',d.scan]].filter(([,u])=>u).map(([k,u])=>`<div style="font-size:11px;font-family:var(--m);letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);margin-top:9px;margin-bottom:5px">${k==='photo'?t('receiptPhotoLbl'):t('docScan')}</div><img src="${u}" style="width:100%;border-radius:10px;border:1px solid var(--line);display:block">`).join('')}
+          <span style="color:var(--ink-3)">${esc(lbl[k]||k)}</span><span class="mono" style="text-align:right">${esc(v)}</span></div>`).join('')}
+      ${[['photo',d.photo],['scan',d.scan]].filter(([,u])=>safeImgSrc(u)).map(([k,u])=>`<div style="font-size:11px;font-family:var(--m);letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);margin-top:9px;margin-bottom:5px">${k==='photo'?t('receiptPhotoLbl'):t('docScan')}</div><img src="${esc(u)}" style="width:100%;border-radius:10px;border:1px solid var(--line);display:block">`).join('')}
       </div>`).join('');})()}
   <div class="btns"><button class="btn ghost" data-act="copyR">${t('copy')}</button>
   ${canEditDocs(s)&&PAYM.some(k=>s.pay[k]>0&&needsDocs(k))?`<button class="btn ghost" data-act="editDocs" data-id="${s.id}">${t('docs')}</button>`:''}
@@ -2593,7 +2602,7 @@ function sheetEditCard(){
           <input type="file" accept="image/*" data-iphoto="1" style="display:none"></label>
         ${o.photo&&!PHOTO_BUSY?`<button class="btn ghost sm" style="color:var(--bad)" data-act="delPhoto">${ic('x')} ${t('photoDelete')}</button>`:''}
       </div></div>`
-    :`${o.photo?`<img src="${o.photo}" style="width:100%;border-radius:12px;border:1px solid var(--line);display:block;margin-bottom:8px">`:''}
+    :`${o.photo?`<img src="${esc(o.photo)}" style="width:100%;border-radius:12px;border:1px solid var(--line);display:block;margin-bottom:8px">`:''}
     <div style="display:flex;gap:8px">
       <label class="btn ghost sm" style="cursor:pointer;flex:1">${ic('scan')} ${t('takePhoto')}
         <input type="file" accept="image/*" data-iphoto="1" style="display:none"></label>
@@ -2865,7 +2874,7 @@ function sheetInvResult(){
   // в этом разовом окне уже не нужно — это видно в «Моём долге» и «Подтверждениях».
   const flatRow=(name,oldQ,nowQ)=>{const d=nowQ-oldQ;
     return `<div class="row"><div class="grow"><div class="t">${esc(name)}</div>
-      <div class="s mono">${t('sys')} ${oldQ} → ${nowQ}</div></div>
+      <div class="s mono">${t('sys')} ${esc(oldQ)} → ${esc(nowQ)}</div></div>
       <div class="r"><div class="t" style="color:${d<0?'var(--bad)':'var(--accent)'}">${d>0?'+':''}${d}</div></div></div>`;};
   const machRows=[...INVMISSING,...(INVOVER||[])];
   return `<div class="sheet-hd"><h3>${t('invResult')}</h3><button class="iconbtn" data-act="close">${ic('x')}</button></div>
@@ -3139,7 +3148,7 @@ function debtCardSec(){
       <button class="btn ghost sm" style="color:var(--bad)" data-act="debtPayCardNo" data-id="${p.id}">${t('reject')}</button>
     </div>`:''}
   </div>`;};
-  return `<div class="sec-t"><span style="display:flex;align-items:center;gap:6px">${PMLOGO.card?`<img class="sec-logo" src="${PMLOGO.card}" alt="">`:''}${t('debtCardSec')}</span></div>
+  return `<div class="sec-t"><span style="display:flex;align-items:center;gap:6px">${PMLOGO.card?`<img class="sec-logo" src="${esc(PMLOGO.card)}" alt="">`:''}${t('debtCardSec')}</span></div>
   <div class="list">${pend.map(row).join('')}${done.map(row).join('')}</div>`;
 }
 // "Оплаты и документы" (2026-09, разделение экрана): здесь остаётся ТОЛЬКО очередь подтверждения
@@ -3157,7 +3166,7 @@ function screenDocs(){
     const pendingL=list.filter(s=>methodIncomplete(m,s)&&methodFieldsTouched(m,s));
     const doneL=list.filter(s=>!methodIncomplete(m,s));
     const logo=PMLOGO[m];
-    return `<div class="sec-t"><span style="display:flex;align-items:center;gap:6px">${logo?`<img class="sec-logo" src="${logo}" alt="">`:''}${t(secKey)}</span></div>
+    return `<div class="sec-t"><span style="display:flex;align-items:center;gap:6px">${logo?`<img class="sec-logo" src="${esc(logo)}" alt="">`:''}${t(secKey)}</span></div>
     ${list.length?`
       ${emptyL.length?subHead(t('smartEmptyLbl'),emptyL.length)+`<div class="list">${emptyL.map(s=>methodSaleRow(s,'empty',m)).join('')}</div>`:''}
       ${pendingL.length?subHead(t('smartPendingLbl'),pendingL.length)+`<div class="list">${pendingL.map(s=>methodSaleRow(s,'pending',m)).join('')}</div>`:''}
@@ -3245,7 +3254,7 @@ function sheetDocForm(){
         <div class="r"><div class="t">${fmt(priceOf(x.o))}</div></div></button>`).join('')}</div>`:''}
     <div class="list">${DOCITEMS.map((i,ix)=>`<div class="row">
       <div class="grow"><div class="t">${esc(i.name)}</div><div class="s mono">${esc(i.article)} · ${fmt(i.price)}</div></div>
-      <input class="inp num" style="width:64px;padding:8px" data-q="${ix}" inputmode="numeric" value="${i.qty}">
+      <input class="inp num" style="width:64px;padding:8px" data-q="${ix}" inputmode="numeric" value="${esc(i.qty)}">
       <button class="iconbtn" data-act="docDelItem" data-i="${ix}">${ic('x')}</button></div>`).join('')}</div>
     ${DOCITEMS.length?`<div class="pad"><div class="card" style="padding:13px 15px">
       <div style="display:flex;justify-content:space-between;font-family:var(--m);font-weight:600;font-size:16px">
@@ -3271,7 +3280,7 @@ function sheetDocForm(){
     ${F('phone',t('phone'),'+998')}
     ${DOCF._verified?`<div class="pad" style="padding-top:0"><div style="background:var(--accent-soft);color:var(--accent);border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.45">✓ ${t('reqDone')}</div></div>`:''}
     <div class="fld"><label>${t('reqPhoto')}</label>
-      ${DOCF.reqPhoto?`<img src="${DOCF.reqPhoto}" style="width:100%;border-radius:10px;border:1px solid var(--line);display:block;margin-bottom:8px">`:''}
+      ${DOCF.reqPhoto?`<img src="${esc(DOCF.reqPhoto)}" style="width:100%;border-radius:10px;border:1px solid var(--line);display:block;margin-bottom:8px">`:''}
       <label class="btn ghost sm" style="cursor:pointer">${ic('scan')} ${t('takePhoto')}<input type="file" accept="image/*" capture="environment" data-fphoto="reqPhoto" style="display:none"></label></div>
   ` : `
     <div class="sec-t">${t('buyer')}</div>
@@ -3468,7 +3477,7 @@ function dkpHTML(d){
   const V=vatOn(), vsum=vatOf(d.total);
   const rows=(d.items||[]).map((i,ix)=>`<tr><td class="r">${ix+1}</td>
     <td>${esc(i.name)}<br><span style="color:#888;font-size:10px">${esc(i.article)}${i.serial?' · № '+esc(i.serial):''}</span></td>
-    <td class="r">${LB.pcs}</td><td class="r">${i.qty}</td><td class="r">${fmt(i.price)}</td><td class="r">${fmt(i.price*i.qty)}</td></tr>`).join('');
+    <td class="r">${LB.pcs}</td><td class="r">${esc(i.qty)}</td><td class="r">${fmt(i.price)}</td><td class="r">${fmt(i.price*i.qty)}</td></tr>`).join('');
   const itemsTable=`<table class="spec"><thead><tr><th>${LB.nn}</th><th>${LB.tovar}</th><th>${LB.unit}</th>
       <th>${LB.qty}</th><th>${V?LB.price:(U?'Narxi, soʻm':'Цена, сум')}</th><th>${V?LB.sum:(U?'Qiymati, soʻm':'Стоимость, сум')}</th></tr></thead><tbody>${rows}
       <tr class="tr-tot"><td colspan="5">${LB.tot}</td><td class="r">${fmt(d.total)}</td></tr>
@@ -3494,7 +3503,7 @@ function dkpHTML(d){
     ${LB.oked}: ${esc(f.oked||'________')}<br>${LB.vat}: ${esc(f.kks||'____________________')}<br>
     ${LB.tel}: ${esc(f.phone||'____________')}<br>${LB.dir}: ${esc(f.director||'____________________')}`;
   const sg=`<table class="pt sgt"><tr><th>${LB.seller}</th><th>${LB.buyer}</th></tr>
-      <tr><td><div class="ovl">${S.sign?`<img src="${S.sign}">`:''}${S.stamp?`<img class="st" src="${S.stamp}">`:''}</div>
+      <tr><td><div class="ovl">${S.sign?`<img src="${esc(S.sign)}">`:''}${S.stamp?`<img class="st" src="${esc(S.stamp)}">`:''}</div>
         <div class="sl">____________________</div>${esc(coDir)}</td>
       <td><div class="sl">____________________</div>${esc(f.director||'____________________')}</td></tr></table>`;
 
@@ -3524,7 +3533,7 @@ function itemCards(items){
   const cards=items.map(i=>{ const o=docObj(i); if(!o) return '';
     const ds=descOf(o), sp=(o.specs||[]).filter(x=>x.k&&x.v);
     if(!o.photo&&!ds&&!sp.length) return '';
-    return `<div class="itc">${o.photo?`<img src="${o.photo}">`:''}
+    return `<div class="itc">${o.photo?`<img src="${esc(o.photo)}">`:''}
       <div style="flex:1"><div class="nm2">${esc(pname(o))}</div>
       <div class="ar">${esc(o.article||'')}</div>
       ${ds?`<div class="ds">${esc(ds)}</div>`:''}
@@ -3537,7 +3546,7 @@ function docHTML(d){
   const S=DB.settings, y=DPFX[d.type];
   const items=(d.items||[]);
   const rows=items.map((i,ix)=>`<tr><td class="r">${ix+1}</td><td>${esc(i.name)}<br><span style="color:#888;font-size:10px">${esc(i.article)}</span></td>
-    <td class="r">${i.qty}</td><td class="r">${fmt(i.price)}</td><td class="r">${fmt(i.price*i.qty)}</td></tr>`).join('');
+    <td class="r">${esc(i.qty)}</td><td class="r">${fmt(i.price)}</td><td class="r">${fmt(i.price*i.qty)}</td></tr>`).join('');
   const f=d.fields||{};
   const extra = d.type==='gt'
     ? `<table><tr><th>${RU('model')}</th><td>${esc(f.model||'')}</td></tr>
@@ -3569,7 +3578,7 @@ function docHTML(d){
     ${f.terms?`<div class="terms">${esc(f.terms)}</div>`:''}
     <div class="sg">
       <div>${RU('sellerParty')}
-        <div class="ovl">${S.sign?`<img src="${S.sign}">`:''}${S.stamp?`<img class="st" src="${S.stamp}">`:''}</div>
+        <div class="ovl">${S.sign?`<img src="${esc(S.sign)}">`:''}${S.stamp?`<img class="st" src="${esc(S.stamp)}">`:''}</div>
         <div class="ln">${esc(S.company)}${S.director?', '+esc(S.director):''}</div></div>
       <div>${d.type==='kp'?RU('forWhom'):RU('buyerParty')}<div class="ln">${esc(f.forWhom||f.buyer||'')}</div></div>
     </div>
@@ -3708,7 +3717,7 @@ function sheetClient(c){
   <div class="seg"><button class="${DEBTPAY.method==='cash'?'on':''}" data-act="debtPayM" data-v="cash">${t('pm_cash')}</button>
     <button class="${DEBTPAY.method==='card'?'on':''}" data-act="debtPayM" data-v="card">${t('pm_card')}</button></div>
   ${DEBTPAY.method==='card'?`<div class="fld" style="margin-top:10px"><label>${t('photo')} <span style="color:var(--warn)">*</span></label>
-    ${DEBTPAY.photo?`<img src="${DEBTPAY.photo}" style="width:100%;border-radius:10px;border:1px solid var(--line);display:block;margin-bottom:8px">`:''}
+    ${DEBTPAY.photo?`<img src="${esc(DEBTPAY.photo)}" style="width:100%;border-radius:10px;border:1px solid var(--line);display:block;margin-bottom:8px">`:''}
     <label class="btn ghost sm" style="cursor:pointer">${ic('scan')} ${t('takePhoto')}<input type="file" accept="image/*" capture="environment" data-debtphoto="1" style="display:none"></label></div>
   <div class="pad" style="padding:8px 0 0;color:var(--ink-3);font-size:12.5px">${t('debtCardPendingNote')}</div>`:''}
   <div class="btns"><button class="btn" data-act="payDebt" data-id="${c.id}">${t('takePay')}</button></div>`:''}
@@ -3947,7 +3956,7 @@ function screenShipments(){
       <div class="s" style="white-space:normal">${esc(names)}</div>
       <div class="s" style="white-space:normal">${dtstr(s.at)} · ${t('shipForBranch')} ${esc(buyerBranch?buyerBranch.name:'—')}${s.clientId?' · '+esc(cli(s.clientId)?.name||''):''}</div></div>
     <div class="r"><div class="s">${e.status==='done'?t('shipDoneNote'):t('shipPendingNote')}</div></div>
-    ${act?`<div style="flex:1 0 100%;margin-top:9px"><button class="btn sm" data-act="shipOk" data-id="${s.id}|${e.id}">${t('shipDoneBtn')}</button></div>`:''}
+    ${act?`<div style="flex:1 0 100%;margin-top:9px"><button class="btn sm" data-act="shipOk" data-id="${esc(s.id)}|${esc(e.id)}">${t('shipDoneBtn')}</button></div>`:''}
   </div>`;};
   return header(t('shipSec'),null,`<button class="iconbtn" data-act="go" data-v="more">${ic('back')}</button>`)+`
   <div class="sec-t">${t('shipSec')}</div>
@@ -3962,16 +3971,16 @@ function sheetInvHistDetail(h){
   ${missing.length?`<div class="sec-t">${t('invMissingUnits')}</div>
   <div class="list">${missing.map(d=>{const m=modl(d.modelId);
     return `<div class="row"><div class="tile mach" style="background:var(--bad-soft);color:var(--bad)">${ic('alert')}</div>
-      <div class="grow"><div class="t">${esc(pname(m))}</div><div class="s mono">${t('sys')} ${d.expected} → ${d.actual}</div></div></div>`;
+      <div class="grow"><div class="t">${esc(pname(m))}</div><div class="s mono">${t('sys')} ${esc(d.expected)} → ${esc(d.actual)}</div></div></div>`;
   }).join('')}</div>`:''}
   ${over.length?`<div class="sec-t">${t('invOverSec')}</div>
   <div class="list">${over.map(d=>{const m=modl(d.modelId);
     return `<div class="row"><div class="tile mach" style="background:var(--accent-soft);color:var(--accent)">${ic('plus')}</div>
-      <div class="grow"><div class="t">${esc(pname(m))}</div><div class="s mono">${t('sys')} ${d.expected} → ${d.actual}</div></div></div>`;
+      <div class="grow"><div class="t">${esc(pname(m))}</div><div class="s mono">${t('sys')} ${esc(d.expected)} → ${esc(d.actual)}</div></div></div>`;
   }).join('')}</div>`:''}
   <div class="sec-t">${t('parts')}</div>
   <div class="list">${parts.length?parts.map(c=>{const p=prod(c.pid), d=c.now-c.old;
-    return `<div class="row"><div class="grow"><div class="t">${esc(p?pname(p):c.pid)}</div><div class="s mono">${t('sys')} ${c.old} → ${c.now}</div></div>
+    return `<div class="row"><div class="grow"><div class="t">${esc(p?pname(p):c.pid)}</div><div class="s mono">${t('sys')} ${esc(c.old)} → ${esc(c.now)}</div></div>
       <div class="r"><div class="t" style="color:${d<0?'var(--bad)':'var(--accent)'}">${d>0?'+':''}${d}</div>${c.pending?`<div class="s" style="color:var(--warn)">${t('pending')}</div>`:''}</div></div>`;
   }).join(''):`<div class="empty">${t('noChanges')}</div>`}</div>
   <div class="btns" style="margin-top:14px"><button class="btn ghost" data-act="close">${t('ok')}</button></div>`;
@@ -4048,7 +4057,7 @@ function sheetPurchase(){
     <div style="display:flex;gap:8px;flex:1 0 100%;margin-top:8px;align-items:flex-end">
       <div style="width:70px">
         <div style="font-size:10px;font-family:var(--m);letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);margin-bottom:4px">${t('qty')}</div>
-        <input class="inp num" style="width:70px;padding:9px" data-pi="${ix}" data-f2="qty" inputmode="numeric" value="${i.qty}">
+        <input class="inp num" style="width:70px;padding:9px" data-pi="${ix}" data-f2="qty" inputmode="numeric" value="${esc(i.qty)}">
       </div>
       <div style="flex:1">
         <div style="font-size:10px;font-family:var(--m);letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);margin-bottom:4px">${t('unitPriceCost')} · ${t('sumCur')}</div>
@@ -4541,7 +4550,7 @@ function sheetPurView(p){
   </div></div>
   <div class="scroll-x"><table class="tb"><thead><tr><th>${t('name')}</th><th>${t('qty')}</th><th>${t('unitPrice')}</th>${can('cost')?`<th>${t('costUzsLbl')}</th>`:''}</tr></thead>
     <tbody>${p.items.map(i=>`<tr><td><b>${esc(i.article)}</b><br><span style="color:var(--ink-3);font-size:12px">${esc(i.name)}${(i.serials&&i.serials.length)?'<br>№ '+esc(i.serials.filter(Boolean).join(', ')):(i.serial?' · '+esc(i.serial):'')}</span></td>
-      <td class="n">${i.qty}</td><td class="n">${fmt2(i.price)} ${p.cur}</td>${can('cost')?`<td class="n">${fmt(i.costUZS)}</td>`:''}</tr>`).join('')}</tbody></table></div>
+      <td class="n">${esc(i.qty)}</td><td class="n">${fmt2(i.price)} ${p.cur}</td>${can('cost')?`<td class="n">${fmt(i.costUZS)}</td>`:''}</tr>`).join('')}</tbody></table></div>
   <div class="pad"><div class="card" style="padding:13px 15px;font-family:var(--m);font-size:13px">
     <div style="display:flex;justify-content:space-between"><span style="color:var(--ink-3)">${t('batchTotal')}</span><span>${fmt(p.goodsUZS)}</span></div>
     ${p.extraUZS?`<div style="display:flex;justify-content:space-between;margin-top:4px"><span style="color:var(--ink-3)">${esc(p.extraNote||t('extraCosts'))}</span><span>+${fmt(p.extraUZS)}</span></div>`:''}
@@ -4597,7 +4606,7 @@ function sheetPurEdit(){
     <div style="display:flex;gap:8px;flex:1 0 100%;margin-top:8px;align-items:flex-start">
       <div style="width:76px">
         ${lbl(t('qty'))}
-        <input class="inp num" style="width:76px;padding:9px" data-pei="${ix}" data-pef="qty" inputmode="numeric" value="${ei.qty}"${isMach?' disabled':''}>
+        <input class="inp num" style="width:76px;padding:9px" data-pei="${ix}" data-pef="qty" inputmode="numeric" value="${esc(ei.qty)}"${isMach?' disabled':''}>
         ${isMach?`<div class="s" style="font-size:10.5px;color:var(--ink-3);margin-top:4px">${t('purEditQtyMachHint')}</div>`
           :(consumed>0?`<div class="s" style="font-size:10.5px;color:var(--ink-3);margin-top:4px">${t('purEditQtyHint')}: ${consumed}</div>`:'')}
       </div>
@@ -5382,10 +5391,10 @@ function screenSettings(){
     ${NETFAIL?`<div style="font-size:11.5px;color:var(--warn);margin-top:6px;line-height:1.45">${t('netBlocked')}</div>`:''}</div>
   <div class="btns" style="margin-bottom:14px"><button class="btn ghost sm" data-act="saveReq">${t('save')}</button></div>
   <div class="fld"><label>${t('sign')}</label>
-    ${DB.settings.sign?`<img src="${DB.settings.sign}" style="max-height:70px;background:#fff;border-radius:8px;padding:6px;border:1px solid var(--line);display:block;margin-bottom:8px">`:''}
+    ${DB.settings.sign?`<img src="${esc(DB.settings.sign)}" style="max-height:70px;background:#fff;border-radius:8px;padding:6px;border:1px solid var(--line);display:block;margin-bottom:8px">`:''}
     <label class="btn ghost sm" style="cursor:pointer">${ic('scan')} ${t('takePhoto')}<input type="file" accept="image/*" data-simg="sign" style="display:none"></label></div>
   <div class="fld"><label>${t('stampImg')}</label>
-    ${DB.settings.stamp?`<img src="${DB.settings.stamp}" style="max-height:90px;background:#fff;border-radius:8px;padding:6px;border:1px solid var(--line);display:block;margin-bottom:8px">`:''}
+    ${DB.settings.stamp?`<img src="${esc(DB.settings.stamp)}" style="max-height:90px;background:#fff;border-radius:8px;padding:6px;border:1px solid var(--line);display:block;margin-bottom:8px">`:''}
     <label class="btn ghost sm" style="cursor:pointer">${ic('scan')} ${t('takePhoto')}<input type="file" accept="image/*" data-simg="stamp" style="display:none"></label></div>
   <div class="btns"><button class="btn ghost sm" data-act="saveReq">${t('save')}</button></div>
   <div class="sec-t">${t('rate')}</div>
