@@ -521,7 +521,7 @@ ru:{
  shipEmpty:"Заказов на отгрузку нет", shipForBranch:"Для филиала", shipHistTitle:"Отгрузки · история",
  yourWh:"ваш склад", willSourceElsewhereHint:"На вашем складе нет — спишется с другого склада, где есть", outOfStockHint:"Нет ни на одном складе",
  moreElsewhereHint:"Ещё есть на складах",
- addAnotherUnit:"Есть ещё экземпляры",
+ addAnotherUnit:"Есть ещё экземпляры", andMore:"ещё", invExpectN:"ожидается", openCard:"Карточка",
  hasPointOn:"Есть точка", hasPointOff:"Только онлайн", hasPointHint:"Определяет, видит ли этот сотрудник вкладку «Склад»",
  onlineSale:"Онлайн-продажа",
  pending:"Ждёт подтверждения", approved:"Подтверждено", rejected:"Отклонено",
@@ -770,7 +770,7 @@ uz:{
  shipEmpty:"Jo'natish uchun buyurtmalar yoʻq", shipForBranch:"Filial uchun", shipHistTitle:"Jo'natmalar · tarix",
  yourWh:"sizning omboringiz", willSourceElsewhereHint:"Sizning omboringizda yoʻq — boshqa ombordan yechiladi", outOfStockHint:"Birorta omborda ham yoʻq",
  moreElsewhereHint:"Boshqa omborlarda ham bor",
- addAnotherUnit:"Yana nusxalari bor",
+ addAnotherUnit:"Yana nusxalari bor", andMore:"yana", invExpectN:"kutilmoqda", openCard:"Kartochka",
  hasPointOn:"Nuqtasi bor", hasPointOff:"Faqat onlayn", hasPointHint:"Bu xodim «Ombor» boʻlimini koʻradimi, shuni belgilaydi",
  onlineSale:"Onlayn-savdo",
  pending:"Tasdiq kutmoqda", approved:"Tasdiqlangan", rejected:"Rad etilgan",
@@ -2215,11 +2215,14 @@ function screenSale(){
       return (m.article+' '+m.nameRu+' '+m.nameUz+' '+m.brand+' '+un).toLowerCase().includes(q);
     });
     rows=list.map(m=>{
-      const n=(online?unitsOf(m.id):unitsOfVis(m.id)).length;
-      return `<button class="row" data-act="model" data-id="${m.id}" ${n?'':'disabled style="opacity:.45"'}>
+      // v26.71: одна строка на модель, в количестве — только свободные экземпляры (без уже лежащих в корзине);
+      // тап открывает выбор конкретного серийника (sheetUnits), карточка модели — оттуда же
+      const av=saleUnitsAvail(m.id), n=av.length;
+      return `<button class="row" data-act="pickUnit" data-id="${esc(m.id)}" ${n?'':'disabled style="opacity:.45"'}>
         ${itemTile(m,'mach')}
-        <div class="grow"><div class="t">${esc(pname(m))}</div><div class="s mono">${esc(m.article)} · ${n} ${t('units')}</div></div>
-        <div class="r"><div class="t">${short(priceOf(m))}</div>${can('cost')?`<div class="s mono">$${fmt(m.price)}</div>`:''}</div></button>`;
+        <div class="grow"><div class="t">${esc(pname(m))}</div><div class="s mono">${esc(m.article)} · ${esc(n)} ${esc(t('pcs'))}</div>
+        ${n?`<div class="s mono" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(serialsShort(av))}</div>`:''}</div>
+        <div class="r"><div class="t">${esc(n?unitPriceRange(av):short(priceOf(m)))}</div>${can('cost')?`<div class="s mono">$${fmt(m.price)}</div>`:''}</div></button>`;
     }).join('')||`<div class="empty">${t('nothing')}</div>`;
   }
   const cnt=CART.reduce((a,i)=>a+i.qty,0), sum=CART.reduce((a,i)=>a+i.price*i.qty,0);
@@ -2232,14 +2235,19 @@ function screenSale(){
     <span class="c">${cnt} ${t('positions')}</span><span class="s">${fmt(sum)}</span><span class="c">${t('checkout')} →</span></button></div>`:''}`;
 }
 
+// v26.71: свободные экземпляры модели для продажи — уже добавленные в корзину повторно не предлагаем
+function saleUnitsAvail(mid){
+  return (!ME.hasPoint?unitsOf(mid):unitsOfVis(mid)).filter(u=>!CART.some(c=>c.unitId===u.id));
+}
 function sheetUnits(m){
-  const list=(!ME.hasPoint?unitsOf(m.id):unitsOfVis(m.id));
+  const list=saleUnitsAvail(m.id);
   return `<div class="sheet-hd"><h3>${esc(pname(m))}</h3><button class="iconbtn" data-act="close">${ic('x')}</button></div>
-  <div class="pad" style="color:var(--ink-3);font-size:13.5px">${t('pickUnit')} · ${fmt(priceOf(m))} ${t('sumCur')}${can('cost')?` ($${fmt(m.price)})`:''}</div>
-  <div class="list">${list.length?list.map(u=>`<button class="row" data-act="addUnit" data-id="${u.id}">
+  <div class="pad" style="color:var(--ink-3);font-size:13.5px">${t('pickUnit')} · ${esc(list.length)} ${esc(t('pcs'))} · ${esc(list.length?unitPriceRange(list):fmt(priceOf(m)))} ${t('sumCur')}${can('cost')?` ($${fmt(m.price)})`:''}</div>
+  <div class="list">${list.length?list.map(u=>`<button class="row" data-act="addUnit" data-id="${esc(u.id)}">
     ${machTile(m,false)}
-    <div class="grow"><div class="t mono">${esc(u.serial)}</div><div class="s">${u.year} · ${esc(whName(u.whId))}</div></div>
-    <div class="r">${statusPill(u.status)}</div></button>`).join(''):`<div class="empty">${t('noUnits')}</div>`}</div>`;
+    <div class="grow"><div class="t mono">${esc(u.serial)}</div><div class="s">${esc(u.year)} · ${esc(whName(u.whId))}</div></div>
+    <div class="r">${statusPill(u.status)}<div class="s mono">${esc(fmt(unitValUZS(u,'price')))}</div></div></button>`).join(''):`<div class="empty">${t('noUnits')}</div>`}</div>
+  <div class="btns" style="margin-top:10px"><button class="btn ghost sm" data-act="model" data-id="${esc(m.id)}">${esc(t('openCard'))} →</button></div>`;
 }
 
 function sheetCart(){
@@ -2563,6 +2571,26 @@ function partRow(p){
 }
 // v26.65: плитка техники в строках единиц/моделей — фото модели (если есть), иначе значок трактора
 const machTile=(m,zoom)=>m?itemTile(m,'mach',zoom):`<div class="tile thumb mach">${ic('tractor')}</div>`;
+// v26.71: одинаковая техника (одна модель) показывается одной строкой — учёт по-прежнему поштучный
+// (DB.units, у каждой единицы свой серийник), меняется только вид списков. Ключ группы — модель +
+// статус (в одну строку не смешиваем «в наличии» и «бронь») + склад, если список по нескольким складам.
+function unitGroups(us,byWh){
+  const by={}, out=[];
+  us.forEach(u=>{ const k=u.modelId+'|'+u.status+(byWh?'|'+u.whId:'');
+    if(!by[k]){ by[k]={key:k,mid:u.modelId,m:modl(u.modelId),status:u.status,whId:u.whId,units:[]}; out.push(by[k]); }
+    by[k].units.push(u); });
+  return out;
+}
+// Серийники коротко: первые 3 + «ещё N». Возвращает обычный текст — экранирует вызывающий код (esc).
+function serialsShort(us){
+  const s=us.map(u=>String(u.serial||''));
+  return s.slice(0,3).join(', ')+(s.length>3?' '+t('andMore')+' '+(s.length-3):'');
+}
+// Цена группы: одна цена, если у всех единиц одинаковая, иначе диапазон min–max (обычный текст).
+function unitPriceRange(us){
+  const v=us.map(u=>unitValUZS(u,'price')); const lo=Math.min(...v), hi=Math.max(...v);
+  return lo===hi?short(lo):short(lo)+'–'+short(hi);
+}
 // v26.67: плитка категории 72 px — фото категории (загружает владелец в «Категориях») или кубик; нажатие открывает категорию
 const catTile=c=>c&&c.photo?`<div class="tile thumb" style="overflow:hidden;padding:0"><img src="${esc(c.photo)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block"></div>`:`<div class="tile thumb">${ic('box')}</div>`;
 async function setCategoryPhoto(c,file){
@@ -2811,7 +2839,7 @@ function sheetModel(m){
 }
 
 /* ---- STOCK ---- */
-let SWH=null, WTAB='parts', SC1='', SKQ='';
+let SWH=null, WTAB='parts', SC1='', SKQ='', SKEXP=null; // SKEXP — раскрытая группа техники (v26.71)
 function screenStock(){
   if(!SWH) SWH=ME.whId;
   let body='';
@@ -2858,11 +2886,22 @@ function screenStock(){
     const val=us.reduce((a,u)=>a+unitValUZS(u,'cost'),0);
     body=`${can('cost')?`<div class="stats" style="padding-top:0"><div class="stat wide"><div class="k">${L==='ru'?'Стоимость техники':'Texnika qiymati'}</div><div class="v" style="color:var(--steel)">${short(val)} <small>${t('sumCur')}</small></div><div class="d">${us.length} ${t('units')}</div></div></div>`:''}
     <div class="sec-t">${t('machines')}</div>
-    <div class="list">${us.length?us.map(u=>{const m=modl(u.modelId);
-      return `<button class="row" data-act="model" data-id="${u.modelId}">
+    <div class="list">${us.length?unitGroups(us).map(g=>{const m=g.m, n=g.units.length;
+      // одна единица — тап открывает её как раньше; несколько — раскрываем список единиц модели
+      if(n===1){ const u=g.units[0];
+        return `<button class="row" data-act="model" data-id="${esc(u.modelId)}">
         ${machTile(m)}
-        <div class="grow"><div class="t">${esc(pname(m))}</div><div class="s mono">${esc(u.serial)} · ${u.year}</div></div>
-        <div class="r">${statusPill(u.status)}</div></button>`;}).join(''):`<div class="empty">${t('noUnits')}</div>`}</div>`;
+        <div class="grow"><div class="t">${esc(pname(m))}</div><div class="s mono">${esc(u.serial)} · ${esc(u.year)}</div></div>
+        <div class="r">${statusPill(u.status)}<div class="s mono">${esc(unitPriceRange(g.units))}</div></div></button>`; }
+      const open=SKEXP===g.key;
+      return `<button class="row" data-act="skGrp" data-id="${esc(g.key)}">
+        ${machTile(m)}
+        <div class="grow"><div class="t">${esc(pname(m))}</div><div class="s mono">${esc(serialsShort(g.units))}</div></div>
+        <div class="r"><div class="t">${esc(n)} ${esc(t('pcs'))}</div>${statusPill(g.status)}<div class="s mono">${esc(unitPriceRange(g.units))}</div></div>
+        <span style="flex:none;color:var(--ink-3)">${open?'▲':'▼'}</span></button>
+      ${open?`<div class="list" style="margin:-2px 0 8px 18px;gap:6px">${g.units.map(u=>`<button class="row" style="padding:8px 10px" data-act="model" data-id="${esc(u.modelId)}">
+        <div class="grow"><div class="t mono" style="font-size:13px">${esc(u.serial)}</div><div class="s">${esc(u.year)}</div></div>
+        <div class="r">${statusPill(u.status)}<div class="s mono">${esc(short(unitValUZS(u,'price')))}</div></div></button>`).join('')}</div>`:''}`;}).join(''):`<div class="empty">${t('noUnits')}</div>`}</div>`;
   }
   return header(t('stock'),whName(SWH))+`
   ${visibleWh().length>1?`<div class="chips" style="padding-top:12px">${visibleWh().map(w=>`<button class="${SWH===w.id?'on':''}" data-act="swh" data-id="${w.id}">${esc(whName(w.id))}</button>`).join('')}</div>`:'<div style="height:10px"></div>'}
@@ -2964,7 +3003,9 @@ function sheetInvMach(){
   <div class="pad" style="color:var(--ink-3);font-size:13.5px">${whName(SWH)} · ${t('invStepMach')}<br>${blind?t('invBlindHint'):(L==='ru'?'введите фактическое количество':'faktik sonini kiriting')}</div>
   <div class="list">${groups.map(x=>`<div class="row">
     ${machTile(x.m)}
-    <div class="grow"><div class="t">${esc(pname(x.m))}</div><div class="s mono">${esc(x.m.article)}${blind?'':' · '+t('sys')+' '+x.count}</div></div>
+    <div class="grow"><div class="t">${esc(pname(x.m))}</div><div class="s mono">${esc(x.m.article)}${blind?'':' · '+esc(t('invExpectN'))+' '+esc(x.count)+' '+esc(t('pcs'))}</div>
+      ${blind?'':`<div style="display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:4px">${x.units.map(u=>`<label class="s mono" style="display:flex;align-items:center;gap:5px;white-space:nowrap">
+        <input type="checkbox" data-invser="${esc(x.m.id)}" checked style="width:16px;height:16px;flex:none">${esc(u.serial)}</label>`).join('')}</div>`}</div>
     <input class="inp num" style="width:82px;padding:8px" data-invm="${x.m.id}" inputmode="numeric" placeholder="0" value="${blind?'':x.count}"></div>`).join('')}</div>
   <div class="btns" style="margin-top:14px"><button class="btn sm" data-act="invNext">${t('invNext')}</button></div>`;
 }
@@ -6158,6 +6199,7 @@ document.addEventListener('click',e=>{
   if(a==='shareItem'){ const o=el.dataset.k==='machine'?modl(id):prod(id); if(o) shareCard(o); return; }
   if(a==='prod'){ const p=prod(id); if(p){SHEET=()=>sheetProd(p);render();} return; }
   if(a==='model'){ const m=modl(id); if(m){SHEET=()=>sheetModel(m);render();} return; }
+  if(a==='skGrp'){ SKEXP=SKEXP===id?null:id; render(); return; }
   if(a==='newUnit'||a==='newUnitAsk'){ if(!can('cost')){ toast(t('noAccess')); return; } SHEET=()=>sheetNewUnit(id||null); render(); return; }
   if(a==='newUnitSave'){ if(!can('cost')){ toast(t('noAccess')); return; }
     const mid=document.getElementById('nu_m').value, ser=document.getElementById('nu_s').value.trim();
@@ -6722,6 +6764,11 @@ function syncBuyerToClient(m){
   if(Object.keys(upd).length) dbw(SB.from('clients').update(upd).eq('id',c.id),['clients'],false);
 }
 document.addEventListener('change',e=>{
+  // v26.71: инвентаризация техники — каждый серийник отмечается отдельно, «факт» модели = число отмеченных
+  // (на сервер по-прежнему уходит только фактическое количество по модели, см. invNext)
+  if(e.target.dataset&&e.target.dataset.invser){ const mid=e.target.dataset.invser;
+    const n=[...document.querySelectorAll('input[data-invser]')].filter(c=>c.dataset.invser===mid&&c.checked).length;
+    const inp=[...document.querySelectorAll('input[data-invm]')].find(i=>i.dataset.invm===mid); if(inp) inp.value=n; return; }
   if(e.target.dataset&&e.target.dataset.act==='mpset'){ render(); return; } // v26.70: показать предупреждения после ввода цены
   if(e.target.id==='selBranch'&&SELLERFORM&&!SELLEREDIT){ captureSellerDraft(); SELLERFORM.newBranch=(e.target.value==='__new__'); render(); return; }
   if(e.target.id==='npCatSel'){ captureNP(); NPNEWCAT=(e.target.value==='__new__'); render(); return; }
