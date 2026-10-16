@@ -423,6 +423,10 @@ setTimeout(window.hideSplash,15000);
 /* ============ i18n ============ */
 const T = {
 ru:{
+ promoToggle:"Для рекламы в Telegram", promoHint:"Автопостинг в @zapcas_bor 3 раза в день и пост при поступлении", promoBadge:"реклама", promoFilter:"Для рекламы",
+ tgPublish:"Опубликовать в Telegram", tgAsk:"Опубликовать в канал @zapcas_bor?", tgYes:"Да", tgNo:"Нет", tgSending:"Публикуем…",
+ tgDone:"Опубликовано в @zapcas_bor", tgFail:"Telegram не принял пост", tgPending:"Отправлено — ответ Telegram ещё не пришёл, проверьте канал",
+ tgSelect:"Выбрать для Telegram", tgSelCancel:"Отмена", tgPublishN:"Опубликовать", tgMax:"Не больше 10 позиций за один пост", tgPickHint:"Отметьте до 10 позиций (запчасти и технику можно вместе)",
  loansTab:"Долги", loansToUs:"Нам должны", loansFromUs:"Мы должны", loanOpen:"Открытые", loanClosed:"Закрытые", loanAll:"Все",
  loanOpenSt:"Открыт", loanClosedSt:"Закрыт", loanCancelledSt:"Отменён", loanTook:"взял", loanReturnBy:"вернуть до",
  loanAmount:"Сумма", loanPaid:"Выплачено", loanRemain:"Остаток", loanNew:"Новый долг", loanEdit:"Изменить", loanCancel:"Отменить долг",
@@ -686,6 +690,10 @@ ru:{
  remitNothingToSend:"Сдавать нечего", remitHistoryTitle:"Сдача выручки", remitNoneYet:"Сдач ещё не было"
 },
 uz:{
+ promoToggle:"Telegramda reklama uchun", promoHint:"@zapcas_bor kanaliga kuniga 3 marta avtopost va kelganda post", promoBadge:"reklama", promoFilter:"Reklama uchun",
+ tgPublish:"Telegramga joylash", tgAsk:"@zapcas_bor kanaliga joylansinmi?", tgYes:"Ha", tgNo:"Yo‘q", tgSending:"Joylanmoqda…",
+ tgDone:"@zapcas_bor kanaliga joylandi", tgFail:"Telegram postni qabul qilmadi", tgPending:"Yuborildi — Telegram javobi hali kelmadi, kanalni tekshiring",
+ tgSelect:"Telegram uchun tanlash", tgSelCancel:"Bekor qilish", tgPublishN:"Joylash", tgMax:"Bitta postda 10 tadan ko‘p emas", tgPickHint:"10 tagacha belgilang (qism va texnikani birga tanlash mumkin)",
  loansTab:"Qarzlar", loansToUs:"Bizga qarzdor", loansFromUs:"Biz qarzdormiz", loanOpen:"Ochiq", loanClosed:"Yopilgan", loanAll:"Hammasi",
  loanOpenSt:"Ochiq", loanClosedSt:"Yopilgan", loanCancelledSt:"Bekor qilingan", loanTook:"oldi", loanReturnBy:"qaytarish muddati",
  loanAmount:"Summa", loanPaid:"Toʻlangan", loanRemain:"Qoldiq", loanNew:"Yangi qarz", loanEdit:"Oʻzgartirish", loanCancel:"Qarzni bekor qilish",
@@ -1380,7 +1388,7 @@ async function enterApp(session){
   const me=DB.users.find(u=>u.authUserId===session.user.id);
   if(!me){ await SB.auth.signOut(); ME=null; emptyDB(); toast('⚠ '+t('noProfileErr')); return false; }
   ME=me; VIEW='home'; SWH=ME.whId;
-  if(ME.role==='admin'){ try{ await loadTables(OWNER_TBL); }catch(e){ console.warn('[DIMAX] loans',e); } } // v26.72
+  if(ME.role==='admin'){ try{ await loadTables(OWNER_TBL); }catch(e){ console.warn('[DIMAX] loans',e); } promoMaintain(); } // v26.72, v26.74
   // Realtime должен подключиться С ТОКЕНОМ пользователя: сразу после входа клиент ещё «anon», а anon по RLS не
   // получает ни одного события (молча). Поэтому сначала передаём токен сессии, потом подписываемся.
   try{ if(SB.realtime&&SB.realtime.setAuth) await SB.realtime.setAuth(session.access_token); }catch(e){ console.warn('[DIMAX] realtime auth',e); }
@@ -1449,7 +1457,8 @@ async function setItemPhoto(o,kind,dataUrl){
   const tbl=kind==='machine'?'models':'products', old=o.photoPath||null;
   try{
     const path=dataUrl?await uploadPhoto(tbl,o.id,dataUrl):null;
-    const {error}=await SB.from(tbl).update({photo_path:path}).eq('id',o.id);
+    const upd={photo_path:path}; if(o.promo&&ME&&ME.role==='admin') Object.assign(upd,await promoPhotoSafe(kind==='machine'?'machine':'part',path)); // v26.74
+    const {error}=await SB.from(tbl).update(upd).eq('id',o.id);
     if(error){ if(path) removePhoto(path); throw error; }
     removePhoto(old); await refresh([tbl]); toast(t('saved'));
   }catch(e){ toastErr(e); render(); }
@@ -1489,11 +1498,117 @@ async function setProductPhoto(o,file){
       if(up.error) throw up.error;
       newUrl=key; // v26.62: в базе — ключ файла (бакет закрытый, показ по временной ссылке)
     }
-    const {error}=await SB.from('products').update({photo_path:newUrl}).eq('id',o.id);
+    const upd={photo_path:newUrl}; if(o.promo&&ME&&ME.role==='admin') Object.assign(upd,await promoPhotoSafe('part',newUrl)); // v26.74
+    const {error}=await SB.from('products').update(upd).eq('id',o.id);
     if(error){ if(key) SB.storage.from(PRODUCT_PHOTO_BUCKET).remove([key]); throw error; }
     if(old&&old!==newUrl) removeProductPhotoFile(old); // старый файл не оставляем сиротой
     PHOTO_BUSY=false; await refresh(['products']); toast(t('saved'));
   }catch(e){ PHOTO_BUSY=false; toastErr(e); render(); }
+}
+// ── v26.74: реклама в Telegram (только Владелец). products/models.promo — товар участвует в автопостинге
+// (3 раза в день и «новое поступление» делает база); promo_photo_url — подписанная ссылка на фото на 1 год,
+// база берёт фото для автопостов только оттуда. Ручная публикация — rpc_tg_post с короткой ссылкой (1 ч).
+const PROMO_TTL=31536000, PROMO_RENEW_MS=300*864e5, TG_PHOTO_TTL=3600;
+let TGSEL=null, TGASK=null, TGBUSY=false, PROMOF=false, EDITPROMO=false; // TGSEL=null — режим выбора выключен
+// где лежит фото: запчасти — бакет product-photos (ключ) или старый app-photos; техника — app-photos.
+// Старые публичные ссылки не из product-photos подписать нельзя — для Telegram такое фото не годится.
+function promoSrc(kind,pp){
+  if(!pp) return null;
+  if(kind==='part'){ const k=ppKey(pp); if(k) return {b:PRODUCT_PHOTO_BUCKET,p:k}; }
+  return /^https?:/.test(pp)?null:{b:'app-photos',p:String(pp)};
+}
+async function promoSign(kind,pp,ttl){
+  const src=promoSrc(kind,pp); if(!src) return null;
+  const {data,error}=await SB.storage.from(src.b).createSignedUrl(src.p,ttl);
+  if(error) throw error; return (data&&data.signedUrl)||null;
+}
+async function promoPhotoPatch(kind,pp){
+  const u=await promoSign(kind,pp,PROMO_TTL);
+  return {promo_photo_url:u,promo_photo_at:u?new Date().toISOString():null};
+}
+// при смене фото рекламного товара: ошибка подписи не должна мешать сохранить само фото — ссылку
+// тогда очищаем, и её заново сделает promoMaintain при следующем входе Владельца
+async function promoPhotoSafe(kind,pp){
+  try{ return await promoPhotoPatch(kind,pp); }catch(e){ console.warn('[DIMAX] promo photo',e); return {promo_photo_url:null,promo_photo_at:null}; }
+}
+const promoFields=(kind,on,pp)=>on?promoPhotoPatch(kind,pp).then(x=>Object.assign({promo:true},x))
+  :Promise.resolve({promo:false,promo_photo_url:null,promo_photo_at:null});
+// при входе Владельца: обновляем ссылки, которых нет или которым больше 300 дней (тихо, ошибки — в консоль)
+async function promoMaintain(){
+  if(!(ME&&ME.role==='admin')||!SB) return;
+  try{
+    const now=Date.now(), jobs=[];
+    [['products','part'],['models','machine']].forEach(([tbl,kind])=>(RAW[tbl]||[]).forEach(r=>{
+      if(!r.promo) return;
+      const src=promoSrc(kind,r.photo_path);
+      if(!src){ if(r.promo_photo_url) jobs.push({tbl,id:r.id,src:null}); return; } // фото удалено — ссылку убираем
+      const at=r.promo_photo_at?Date.parse(r.promo_photo_at):0;
+      if(!r.promo_photo_url||!(now-at<PROMO_RENEW_MS)) jobs.push({tbl,id:r.id,src}); }));
+    if(!jobs.length) return;
+    const urls={};
+    for(const b of [PRODUCT_PHOTO_BUCKET,'app-photos']){
+      const ps=[...new Set(jobs.filter(j=>j.src&&j.src.b===b).map(j=>j.src.p))];
+      for(let i=0;i<ps.length;i+=100){
+        const {data,error}=await SB.storage.from(b).createSignedUrls(ps.slice(i,i+100),PROMO_TTL);
+        if(error){ console.warn('[DIMAX] promo urls',error); continue; }
+        (data||[]).forEach(d=>{ if(d.signedUrl) urls[b+'|'+d.path]=d.signedUrl; else console.warn('[DIMAX] promo url',d.path,d.error); }); } }
+    const iso=new Date().toISOString();
+    for(const j of jobs){
+      let upd;
+      if(!j.src) upd={promo_photo_url:null,promo_photo_at:null};
+      else{ const u=urls[j.src.b+'|'+j.src.p]; if(!u) continue; upd={promo_photo_url:u,promo_photo_at:iso}; }
+      const {error}=await SB.from(j.tbl).update(upd).eq('id',j.id);
+      if(error) console.warn('[DIMAX] promo update',j.tbl,j.id,error); }
+  }catch(e){ console.warn('[DIMAX] promo maintain',e); }
+}
+// публикация 1–10 позиций: короткие ссылки на фото → rpc_tg_post → ждём ответ Telegram (6 × 1,5 с)
+async function tgPublish(items,multi){
+  if(TGBUSY||!items.length) return; TGBUSY=true; render();
+  try{
+    const list=[];
+    for(const it of items){ const o=it.kind==='machine'?modl(it.id):prod(it.id); if(!o) continue;
+      const x={kind:it.kind,id:it.id}; const u=await promoSign(it.kind,o.photoPath,TG_PHOTO_TTL); if(u) x.photo=u; list.push(x); }
+    if(!list.length) throw new Error(t('nothing'));
+    const {data,error}=await SB.rpc('rpc_tg_post',{p:{items:list}});
+    if(error) throw error;
+    const req=data&&data.reqId; let res=null;
+    for(let i=0;i<6&&req!=null&&!res;i++){
+      await new Promise(r=>setTimeout(r,1500));
+      const q=await SB.rpc('rpc_tg_post_result',{p_req:req});
+      if(q.error) throw q.error;
+      if(q.data&&q.data.done) res=q.data; }
+    TGBUSY=false; TGASK=null;
+    if(res&&res.ok){ if(multi) TGSEL=null; toast(t('tgDone')); }
+    else toast('⚠ '+(res?(res.error||t('tgFail')):t('tgPending')));
+  }catch(e){ TGBUSY=false; TGASK=null; toastErr(e); }
+  render();
+}
+const promoBadge=o=>can('settings')&&o&&o.promo?` <span style="font-size:10.5px;font-weight:600;color:var(--accent);background:var(--accent-soft);border-radius:6px;padding:1px 6px;white-space:nowrap">★ ${esc(t('promoBadge'))}</span>`:'';
+const tgOn=(kind,id)=>!!TGSEL&&TGSEL.some(x=>x.kind===kind&&x.id===id);
+const tgBox=on=>`<span style="flex:none;width:22px;height:22px;border-radius:6px;border:2px solid ${on?'var(--accent)':'var(--line)'};background:${on?'var(--accent)':'transparent'};color:var(--accent-ink);display:grid;place-items:center;font-size:14px;font-weight:700">${on?'✓':''}</span>`;
+function tgCardBtn(kind,id){
+  if(!can('settings')) return '';
+  if(TGASK===kind+':'+id) return `<div class="pad" style="padding-bottom:0;font-weight:600;font-size:14px">${esc(t('tgAsk'))}</div>
+    <div class="btns" style="margin-top:8px"><button class="btn" data-act="tgYes" data-k="${esc(kind)}" data-id="${esc(id)}" ${TGBUSY?'disabled':''}>${esc(TGBUSY?t('tgSending'):t('tgYes'))}</button>
+    <button class="btn ghost" data-act="tgNo" ${TGBUSY?'disabled':''}>${esc(t('tgNo'))}</button></div>`;
+  return `<div class="btns" style="margin-top:8px"><button class="btn ghost sm" data-act="tgAsk" data-k="${esc(kind)}" data-id="${esc(id)}" ${TGBUSY?'disabled':''}>${ic('send')} ${esc(TGBUSY?t('tgSending'):t('tgPublish'))}</button></div>`;
+}
+function tgTools(){
+  if(!can('settings')) return '';
+  return `<div class="chips" style="padding-top:0"><button class="${PROMOF?'on':''}" data-act="promoF">★ ${esc(t('promoFilter'))}</button>
+    <button class="${TGSEL?'on':''}" data-act="tgSel">${esc(t('tgSelect'))}</button></div>
+    ${TGSEL?`<div class="pad" style="padding:0 16px 8px;color:var(--ink-3);font-size:12px">${esc(t('tgPickHint'))}</div>`:''}`;
+}
+function tgBar(){
+  if(!TGSEL||!can('settings')) return '';
+  const n=TGSEL.length;
+  return `<div style="height:84px"></div><div class="cart-bar"><div style="background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;box-shadow:0 8px 24px -8px rgba(0,0,0,.4)">
+    ${TGASK==='multi'?`<div style="font-weight:600;font-size:14px;padding:2px 4px 8px">${esc(t('tgAsk'))} (${esc(n)})</div>
+      <div style="display:flex;gap:8px"><button class="btn sm" data-act="tgYes" ${TGBUSY?'disabled':''}>${esc(TGBUSY?t('tgSending'):t('tgYes'))}</button>
+      <button class="btn ghost sm" data-act="tgNo" ${TGBUSY?'disabled':''}>${esc(t('tgNo'))}</button></div>`
+    :`<div style="display:flex;gap:8px"><button class="btn sm" data-act="tgMultiAsk" ${!n||TGBUSY?'disabled':''}>${ic('send')} ${esc(t('tgPublishN'))} (${esc(n)})</button>
+      <button class="btn ghost sm" style="width:auto;padding:10px 16px" data-act="tgSel" ${TGBUSY?'disabled':''}>${esc(t('tgSelCancel'))}</button></div>`}
+  </div></div>`;
 }
 async function setSettingsImage(key,dataUrl){
   const col=key==='stamp'?'stamp_path':'sign_path', old=DB.settings[key==='stamp'?'stampPath':'signPath']||null;
@@ -2802,6 +2917,9 @@ function sheetEditCard(){
     <input class="inp" style="flex:1;padding:9px" data-si="${ix}" data-sf="v" placeholder="${t('specVal')}" value="${esc(s.v||'')}">
     <button class="iconbtn" data-act="specDel" data-i="${ix}">${ic('x')}</button></div>`).join('')
     :`<div class="empty" style="padding:18px">${t('nothing')}</div>`}</div>
+  ${can('settings')?`<div class="sec-t">Telegram</div>
+  <div class="list"><button class="row" data-act="promoTog">${tgBox(EDITPROMO)}
+    <div class="grow"><div class="t">${esc(t('promoToggle'))}</div><div class="s">${esc(t('promoHint'))}</div></div></button></div>`:''}
   <div class="btns" style="margin-top:14px"><button class="btn" data-act="editSave">${t('save')}</button></div>`;
 }
 
@@ -2856,7 +2974,8 @@ function sheetProd(p){
   <div class="btns" style="margin-top:14px">${can('settings')?`<button class="btn ghost" data-act="editCard" data-id="${p.id}" data-k="part">${t('editCard')}</button>`:''}
     <button class="btn" data-act="addFromCard" data-id="${p.id}" ${outOfStock?'disabled':''}>${t('sale')} →</button></div>
   ${myPriceFld(p)}
-  <div class="btns" style="margin-top:8px"><button class="btn ghost sm" data-act="shareItem" data-id="${p.id}" data-k="part">${ic('send')} ${t('shareCard')}</button></div>`;
+  <div class="btns" style="margin-top:8px"><button class="btn ghost sm" data-act="shareItem" data-id="${p.id}" data-k="part">${ic('send')} ${t('shareCard')}</button></div>
+  ${tgCardBtn('part',p.id)}`;
 }
 
 function sheetModel(m){
@@ -2880,6 +2999,7 @@ function sheetModel(m){
   <div class="btns" style="margin-top:14px">${can('settings')?`<button class="btn ghost" data-act="editCard" data-id="${m.id}" data-k="machine">${t('editCard')}</button>`:''}
     <button class="btn ghost" data-act="shareItem" data-id="${m.id}" data-k="machine">${ic('send')} ${t('shareCard')}</button></div>
   ${myPriceFld(m)}
+  ${tgCardBtn('machine',m.id)}
   ${can('cost')?`<div class="btns" style="margin-top:8px"><button class="btn ghost" data-act="newUnit" data-id="${m.id}">${ic('plus')} ${t('addUnit')}</button></div>`:''}
   ${inSt?`<div class="btns" style="margin-top:8px"><button class="btn" data-act="pickUnit" data-id="${m.id}">${t('sale')} →</button></div>`:''}`;
 }
@@ -2898,13 +3018,14 @@ function screenStock(){
     // тап по категории → список деталей в ней; нехватка теперь видна значком на самой категории,
     // а не сортировкой всего списка целиком.
     const stockRow=p=>{ const qty=stockOf(p.id,SWH), low=qty<=p.minStock;
-      return `<button class="row" data-act="prod" data-id="${p.id}">
-      ${p.photo?itemTile(p):`<div class="tile thumb" ${low?'style="background:var(--warn-soft);color:var(--warn)"':''}>${esc(p.article.split('-')[1]?p.article.split('-')[1].slice(0,2):p.article.slice(0,2))}</div>`}
-      <div class="grow"><div class="t">${esc(pname(p))}</div><div class="s mono">${esc(p.article)} · min ${p.minStock}</div></div>
+      return `<button class="row" ${TGSEL?`data-act="tgPick" data-k="part"`:'data-act="prod"'} data-id="${esc(p.id)}">
+      ${TGSEL?tgBox(tgOn('part',p.id)):''}${p.photo?itemTile(p):`<div class="tile thumb" ${low?'style="background:var(--warn-soft);color:var(--warn)"':''}>${esc(p.article.split('-')[1]?p.article.split('-')[1].slice(0,2):p.article.slice(0,2))}</div>`}
+      <div class="grow"><div class="t">${esc(pname(p))}${promoBadge(p)}</div><div class="s mono">${esc(p.article)} · min ${p.minStock}</div></div>
       <div class="r"><div class="t" style="color:${low?'var(--warn)':'var(--ink)'}">${qty}</div>${can('cost')?`<div class="s mono">${short(qty*costOf(p))}</div>`:''}</div></button>`; };
     let listHtml='', catHeader='';
-    if(q){
-      const list=DB.products.filter(p=>(p.article+' '+p.nameRu+' '+p.nameUz+' '+(p.barcode||'')).toLowerCase().includes(q));
+    const promoOnly=can('settings')&&PROMOF; // v26.74: фильтр «Для рекламы» — плоский список по всем категориям
+    if(q||promoOnly){
+      const list=DB.products.filter(p=>(!promoOnly||p.promo)&&(!q||(p.article+' '+p.nameRu+' '+p.nameUz+' '+(p.barcode||'')).toLowerCase().includes(q)));
       listHtml=list.length?list.map(stockRow).join(''):`<div class="empty">${t('nothing')}</div>`;
     }else if(!SC1){
       listHtml=DB.categories.map(c=>{
@@ -2926,23 +3047,30 @@ function screenStock(){
     body=`${can('cost')?`<div class="stats" style="padding-top:0"><div class="stat wide"><div class="k">${L==='ru'?'Стоимость запчастей':'Qismlar qiymati'}</div><div class="v">${short(val)} <small>${t('sumCur')}</small></div></div></div>`:''}
     <div class="sec-t">${t('left')} ${can('cost')?`<a data-act="journal">${t('journal')} →</a>`:''}</div>
     <div class="fld"><input class="inp" id="skq" placeholder="${t('search')}" value="${esc(SKQ)}" autocomplete="off"></div>
-    ${catHeader}<div class="list">${listHtml}</div>`;
+    ${tgTools()}${catHeader}<div class="list">${listHtml}</div>`;
   }else{
     const us=DB.units.filter(u=>u.whId===SWH&&activeUnit(u));
     const val=us.reduce((a,u)=>a+unitValUZS(u,'cost'),0);
+    const gs=unitGroups(us).filter(g=>!(can('settings')&&PROMOF)||(g.m&&g.m.promo));
     body=`${can('cost')?`<div class="stats" style="padding-top:0"><div class="stat wide"><div class="k">${L==='ru'?'Стоимость техники':'Texnika qiymati'}</div><div class="v" style="color:var(--steel)">${short(val)} <small>${t('sumCur')}</small></div><div class="d">${us.length} ${t('units')}</div></div></div>`:''}
     <div class="sec-t">${t('machines')}</div>
-    <div class="list">${us.length?unitGroups(us).map(g=>{const m=g.m, n=g.units.length;
+    ${tgTools()}
+    <div class="list">${gs.length?gs.map(g=>{const m=g.m, n=g.units.length;
+      // v26.74: режим выбора для Telegram — тап по строке отмечает модель (без раскрытия единиц)
+      if(TGSEL) return `<button class="row" data-act="tgPick" data-k="machine" data-id="${esc(g.mid)}">
+        ${tgBox(tgOn('machine',g.mid))}${machTile(m)}
+        <div class="grow"><div class="t">${esc(pname(m))}${promoBadge(m)}</div><div class="s mono">${esc(serialsShort(g.units))}</div></div>
+        <div class="r">${n>1?`<div class="t">${esc(n)} ${esc(t('pcs'))}</div>`:''}${statusPill(g.status)}<div class="s mono">${esc(unitPriceRange(g.units))}</div></div></button>`;
       // одна единица — тап открывает её как раньше; несколько — раскрываем список единиц модели
       if(n===1){ const u=g.units[0];
         return `<button class="row" data-act="model" data-id="${esc(u.modelId)}">
         ${machTile(m)}
-        <div class="grow"><div class="t">${esc(pname(m))}</div><div class="s mono">${esc(u.serial)} · ${esc(u.year)}</div></div>
+        <div class="grow"><div class="t">${esc(pname(m))}${promoBadge(m)}</div><div class="s mono">${esc(u.serial)} · ${esc(u.year)}</div></div>
         <div class="r">${statusPill(u.status)}<div class="s mono">${esc(unitPriceRange(g.units))}</div></div></button>`; }
       const open=SKEXP===g.key;
       return `<button class="row" data-act="skGrp" data-id="${esc(g.key)}">
         ${machTile(m)}
-        <div class="grow"><div class="t">${esc(pname(m))}</div><div class="s mono">${esc(serialsShort(g.units))}</div></div>
+        <div class="grow"><div class="t">${esc(pname(m))}${promoBadge(m)}</div><div class="s mono">${esc(serialsShort(g.units))}</div></div>
         <div class="r"><div class="t">${esc(n)} ${esc(t('pcs'))}</div>${statusPill(g.status)}<div class="s mono">${esc(unitPriceRange(g.units))}</div></div>
         <span style="flex:none;color:var(--ink-3)">${open?'▲':'▼'}</span></button>
       ${open?`<div class="list" style="margin:-2px 0 8px 18px;gap:6px">${g.units.map(u=>`<button class="row" style="padding:8px 10px" data-act="model" data-id="${esc(u.modelId)}">
@@ -2976,7 +3104,7 @@ function screenStock(){
     // Списание техники (поломка/утеря) — только Владелец, см. комментарий выше про запчасти
     // v26.63: «Списание» перенесено в «Ещё» (по решению владельца) — здесь кнопки больше нет
   ])}
-  ${body}`;
+  ${body}${tgBar()}`;
 }
 function actionRow(items){
   if(!items.length) return '';
@@ -5898,6 +6026,7 @@ function sheetIosInstall(){
   <div class="list" style="margin-top:8px">${step(1,t('iosStep0'))}${step(2,t('iosStep1'),'shareIos')}${step(3,t('iosStep2'),'plus')}</div>`; }
 function render(){
   if(typeof CART!=='undefined'&&CART.length) cartSync(); // v26.70: базовая цена — всегда текущая из каталога
+  if(TGSEL&&(VIEW!=='stock'||!ME||ME.role!=='admin')){ TGSEL=null; if(TGASK==='multi'&&!TGBUSY) TGASK=null; } // v26.74: ушли со «Склада» — выбор сброшен
   document.documentElement.classList.toggle('noimgsave',!!(ME&&ME.role!=='admin')); // v26.62
   const app=document.getElementById('app');
   if(LOAD_CORRUPT_RAW){ app.innerHTML=screenCorruptRecovery(); return; }
@@ -5963,7 +6092,7 @@ document.addEventListener('click',e=>{
   if(a==='installApp'){ doInstall(); return; }
   if(a==='installHide'){ INSTALL_HIDE=true; render(); return; }
   if(a==='earnQ'){ EARNQ=el.dataset.v; render(); return; }
-  if(a==='close'){ if(EDITSALE){EDITSALE=null;PAYDOCS={};} SHEET=null; render(); return; }
+  if(a==='close'){ if(EDITSALE){EDITSALE=null;PAYDOCS={};} if(!TGBUSY&&TGASK!=='multi') TGASK=null; SHEET=null; render(); return; }
   if(a==='login'){ ME=usr(id); VIEW='home'; SWH=ME.whId; render(); return; }
   if(a==='logout'){ hbStop(); if(SB) SB.auth.signOut(); stopRealtime(); RT=null; ME=null; CART=[]; PAYROWS=[]; DISC=0; DISCCM=''; CLID=''; PAYDOCS={}; EDITSALE=null; PUR=null; PURQ=''; SUPFROM=null; MARKETTRIED=false; CARTWHPICK=null; render(); return; }
   // ---- Единый вход (2026-09): продавцов теперь заводит только Владелец (см. screenSellers),
@@ -6375,6 +6504,7 @@ document.addEventListener('click',e=>{
   if(a==='scanDemo'){ toast(L==='ru'?'Сканер камерой — в рабочей версии':'Kamera skaneri — ishchi versiyada'); return; }
 
   if(a==='editCard'){ if(!can('settings')){ toast(t('noAccess')); return; } EDITID=id; EDITKIND=el.dataset.k||'part';
+    EDITPROMO=!!((EDITKIND==='machine'?modl(id):prod(id))||{}).promo; TGASK=null; // v26.74
     const p0=EDITKIND==='part'?prod(id):null; EDITCOST=p0&&can('cost')?{usd:String(p0.purchaseUsd||0),cost:String(p0.cost||0)}:null;
     SHEET=sheetEditCard; render(); return; }
   if(a==='editBack'){ collectCard(); const o=editObj(); SHEET=EDITKIND==='machine'?()=>sheetModel(o):()=>sheetProd(o); render(); return; }
@@ -6383,7 +6513,11 @@ document.addEventListener('click',e=>{
     const cc=EDITKIND==='part'&&EDITCOST?checkCosts(EDITCOST.usd,EDITCOST.cost):undefined;
     if(cc===null) return;
     const tbl=EDITKIND==='machine'?'models':'products';
-    dbw(SB.from(tbl).update({desc_ru:o.descRu||null,desc_uz:o.descUz||null,price:+o.price||0,specs:o.specs||[]}).eq('id',o.id),cc?false:[tbl])
+    // v26.74: «Для рекламы в Telegram» — вместе с карточкой; при включении сразу делаем ссылку на фото на 1 год
+    const promoCh=EDITPROMO!==!!o.promo;
+    (promoCh?promoFields(EDITKIND,EDITPROMO,o.photoPath):Promise.resolve({}))
+      .then(pf=>dbw(SB.from(tbl).update(Object.assign({desc_ru:o.descRu||null,desc_uz:o.descUz||null,price:+o.price||0,specs:o.specs||[]},pf)).eq('id',o.id),cc?false:[tbl]),
+        e=>{ toastErr(e); return {error:e}; })
       .then(r=>r.error||!cc?r:dbw(SB.from('product_costs').upsert({product_id:o.id,cost:cc.cost,purchase_price_usd:cc.usd},{onConflict:'product_id'}),[tbl,'product_costs']))
       .then(({error})=>{ if(error) return; EDITCOST=null; const o2=editObj()||o; SHEET=EDITKIND==='machine'?()=>sheetModel(o2):()=>sheetProd(o2); render(); toast(t('saved')); });
     return; }
@@ -6392,8 +6526,23 @@ document.addEventListener('click',e=>{
   if(a==='delPhoto'){ if(!can('settings')) return; collectCard(); const o=editObj(); if(!o) return;
     if(EDITKIND==='part') setProductPhoto(o,null); else setItemPhoto(o,EDITKIND,null); return; }
   if(a==='shareItem'){ const o=el.dataset.k==='machine'?modl(id):prod(id); if(o) shareCard(o); return; }
-  if(a==='prod'){ const p=prod(id); if(p){SHEET=()=>sheetProd(p);render();} return; }
-  if(a==='model'){ const m=modl(id); if(m){SHEET=()=>sheetModel(m);render();} return; }
+  if(a==='prod'){ const p=prod(id); if(p){ if(!TGBUSY) TGASK=null; SHEET=()=>sheetProd(p);render();} return; }
+  if(a==='model'){ const m=modl(id); if(m){ if(!TGBUSY) TGASK=null; SHEET=()=>sheetModel(m);render();} return; }
+  // v26.74: Telegram — только Владелец
+  if(a==='promoTog'){ if(!can('settings')) return; collectCard(); EDITPROMO=!EDITPROMO; render(); return; }
+  if(a==='promoF'){ if(!can('settings')) return; PROMOF=!PROMOF; render(); return; }
+  if(a==='tgAsk'){ if(!can('settings')||TGBUSY) return; TGASK=el.dataset.k+':'+id; render(); return; }
+  if(a==='tgNo'){ if(TGBUSY) return; TGASK=null; render(); return; }
+  if(a==='tgMultiAsk'){ if(!can('settings')||TGBUSY||!TGSEL||!TGSEL.length) return; TGASK='multi'; render(); return; }
+  if(a==='tgYes'){ if(!can('settings')||TGBUSY) return;
+    if(TGASK==='multi'){ if(TGSEL&&TGSEL.length) tgPublish(TGSEL.slice(),true); }
+    else if(TGASK===el.dataset.k+':'+id) tgPublish([{kind:el.dataset.k,id}],false);
+    return; }
+  if(a==='tgSel'){ if(!can('settings')||TGBUSY) return; TGSEL=TGSEL?null:[]; TGASK=null; render(); return; }
+  if(a==='tgPick'){ if(!can('settings')||!TGSEL||TGBUSY) return; const k=el.dataset.k==='machine'?'machine':'part';
+    const ix=TGSEL.findIndex(x=>x.kind===k&&x.id===id);
+    if(ix>=0) TGSEL.splice(ix,1); else if(TGSEL.length>=10){ toast(t('tgMax')); return; } else TGSEL.push({kind:k,id});
+    if(TGASK==='multi') TGASK=null; render(); return; }
   if(a==='skGrp'){ SKEXP=SKEXP===id?null:id; render(); return; }
   if(a==='newUnit'||a==='newUnitAsk'){ if(!can('cost')){ toast(t('noAccess')); return; } SHEET=()=>sheetNewUnit(id||null); render(); return; }
   if(a==='newUnitSave'){ if(!can('cost')){ toast(t('noAccess')); return; }
