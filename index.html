@@ -437,6 +437,9 @@ ru:{
  tgPlanned:"Запланировано", tgBRow:"{when} · {k} · ждёт {p} · опубликовано {s} · ошибок {f}", tgBCancel:"Отменить",
  tgBAsk:"Отменить эту часть? Уже опубликованные посты останутся.", tgBCancelled:"Часть отменена: {k}",
  tgStWait:"ждёт", tgStSent:"опубликован", tgStFail:"ошибка", tgStCanc:"отменён",
+ tgRepeat:"🔁 Повторять каждый день в это время (до отмены)", tgRepeatHint:"Для повтора выберите время",
+ tgRepDone:"Каждый день в {hm}: {k}. Первая публикация — {first}", tgDaily:"Каждый день",
+ tgRRow:"🔁 каждый день {hm} · {k} · следующая: {next}", tgRAsk:"Остановить повтор? Уже опубликованные посты останутся.", tgRStopped:"Повтор остановлен",
  loansTab:"Долги", loansToUs:"Нам должны", loansFromUs:"Мы должны", loanOpen:"Открытые", loanClosed:"Закрытые", loanAll:"Все",
  loanOpenSt:"Открыт", loanClosedSt:"Закрыт", loanCancelledSt:"Отменён", loanTook:"взял", loanReturnBy:"вернуть до",
  loanAmount:"Сумма", loanPaid:"Выплачено", loanRemain:"Остаток", loanNew:"Новый долг", loanEdit:"Изменить", loanCancel:"Отменить долг",
@@ -714,6 +717,9 @@ uz:{
  tgPlanned:"Rejalashtirilgan", tgBRow:"{when} · {k} · kutmoqda {p} · joylandi {s} · xato {f}", tgBCancel:"Bekor qilish",
  tgBAsk:"Bu qism bekor qilinsinmi? Joylangan postlar qoladi.", tgBCancelled:"Qism bekor qilindi: {k}",
  tgStWait:"kutmoqda", tgStSent:"joylandi", tgStFail:"xato", tgStCanc:"bekor qilindi",
+ tgRepeat:"🔁 Har kuni shu vaqtda takrorlash (bekor qilinguncha)", tgRepeatHint:"Takrorlash uchun vaqtni tanlang",
+ tgRepDone:"Har kuni {hm} da: {k}. Birinchi joylash — {first}", tgDaily:"Har kuni",
+ tgRRow:"🔁 har kuni {hm} · {k} · keyingisi: {next}", tgRAsk:"Takrorlash to‘xtatilsinmi? Joylangan postlar qoladi.", tgRStopped:"Takrorlash to‘xtatildi",
  loansTab:"Qarzlar", loansToUs:"Bizga qarzdor", loansFromUs:"Biz qarzdormiz", loanOpen:"Ochiq", loanClosed:"Yopilgan", loanAll:"Hammasi",
  loanOpenSt:"Ochiq", loanClosedSt:"Yopilgan", loanCancelledSt:"Bekor qilingan", loanTook:"oldi", loanReturnBy:"qaytarish muddati",
  loanAmount:"Summa", loanPaid:"Toʻlangan", loanRemain:"Qoldiq", loanNew:"Yangi qarz", loanEdit:"Oʻzgartirish", loanCancel:"Qarzni bekor qilish",
@@ -1533,7 +1539,8 @@ const PROMO_TTL=31536000, PROMO_RENEW_MS=300*864e5, TG_PHOTO_TTL=3600;
 const plRu=(x,f)=>{const a=x%100,b=x%10; if(a>10&&a<20) return f[2]; if(b===1) return f[0]; if(b>1&&b<5) return f[1]; return f[2];};
 let TGSEL=null, TGASK=null, TGBUSY=false, PROMOF=false, EDITPROMO=false; // TGSEL=null — режим выбора выключен
 // v26.76: части до 10 карточек по расписанию. TGSCHED — выбор времени в панели; TGB — части из rpc_tg_batches
-let TGSCHED={opt:'now',custom:''}, TGB=null, TGB_LOADING=false, TGBOPEN=false, TGBROW=null;
+let TGSCHED={opt:'now',custom:'',repeat:false}, TGB=null, TGB_LOADING=false, TGBOPEN=false, TGBROW=null;
+let TGR=null, TGRROW=null; // v26.77: ежедневные повторы из rpc_tg_repeats
 // где лежит фото: запчасти — бакет product-photos (ключ) или старый app-photos; техника — app-photos.
 // Старые публичные ссылки не из product-photos подписать нельзя — для Telegram такое фото не годится.
 function promoSrc(kind,pp){
@@ -1631,19 +1638,21 @@ async function tgSignPhotos(items,ttl){
       (data||[]).forEach(d=>{ if(d.signedUrl) urls[b+'|'+d.path]=d.signedUrl; else console.warn('[DIMAX] tg photo',d.path,d.error); }); } }
   return urls;
 }
-async function tgPublish(items,multi,atIso){
+async function tgPublish(items,multi,atIso,repeat){
   if(TGBUSY||!items.length) return; TGBUSY=true; render();
   let created=false;
   try{
     // ссылка на фото: «сейчас» — 1 ч; по расписанию — до момента публикации + сутки (не больше 61 дня)
-    const ttl=atIso?Math.min(Math.ceil((Date.parse(atIso)-Date.now())/1000)+86400,61*86400):TG_PHOTO_TTL;
+    // v26.77: повтор — база берёт эти ссылки каждый день, поэтому на год (PROMO_TTL)
+    const ttl=repeat&&atIso?PROMO_TTL:atIso?Math.min(Math.ceil((Date.parse(atIso)-Date.now())/1000)+86400,61*86400):TG_PHOTO_TTL;
     const urls=await tgSignPhotos(items,Math.max(ttl,TG_PHOTO_TTL));
     const list=[];
     for(const it of items){ const o=it.kind==='machine'?modl(it.id):prod(it.id); if(!o) continue; // порядок выбора сохраняется
       const x={kind:it.kind,id:it.id}, src=promoSrc(it.kind,o.photoPath); if(src&&urls[src.b+'|'+src.p]) x.photo=urls[src.b+'|'+src.p]; list.push(x); }
     if(!list.length) throw new Error(t('nothing'));
     const single=list.length===1&&!atIso;
-    const {data,error}=await SB.rpc('rpc_tg_post',{p:{items:list,at:atIso||null}});
+    const pp={items:list,at:atIso||null}; if(repeat&&atIso) pp.repeat=true;
+    const {data,error}=await SB.rpc('rpc_tg_post',{p:pp});
     if(error) throw error;
     created=true; if(multi) TGSEL=null; // часть уже в базе — повторно ту же выборку не публикуем
     const d=data||{}, req=d.reqId, n=+d.count||list.length;
@@ -1657,7 +1666,9 @@ async function tgPublish(items,multi,atIso){
       if(q.data&&q.data.done) res=q.data; }
     TGBUSY=false; TGASK=null;
     const lastHM=d.lastAt&&!isNaN(new Date(d.lastAt))?tgHM(new Date(d.lastAt)):'—';
-    if(req==null) toast(tgFmt('tgPartSched',{k:tgCards(n),first:tgTime(d.firstAt||atIso),last:lastHM})+skipped); // назначена на потом
+    if(repeat&&atIso&&d.repeatId!=null){ const f=new Date(d.firstAt||atIso); // v26.77: каждый день в это время
+      toast(tgFmt('tgRepDone',{hm:isNaN(f)?'—':tgHM(f),k:tgCards(n),first:tgTime(d.firstAt||atIso)})+skipped); }
+    else if(req==null) toast(tgFmt('tgPartSched',{k:tgCards(n),first:tgTime(d.firstAt||atIso),last:lastHM})+skipped); // назначена на потом
     else if(res&&res.ok) toast((single||n<=1?t('tgDone'):tgFmt('tgPartFirst',{n,last:lastHM}))+skipped);
     else toast('⚠ '+(res?(res.error||t('tgFail')):t('tgPending'))+(!single&&n>1?t('tgPartRest'):'')+skipped);
   }catch(e){ TGBUSY=false; TGASK=null; toastErr(e); }
@@ -1667,18 +1678,27 @@ async function tgPublish(items,multi,atIso){
 // Обновление: при входе на «Склад», после публикации/отмены и при перерисовке, если старше 60 с (без setInterval)
 async function tgBatchesLoad(){
   if(!(ME&&ME.role==='admin')||!SB||TGB_LOADING) return; TGB_LOADING=true;
-  const was=TGB?JSON.stringify(TGB.list):'';
-  try{ const {data,error}=await SB.rpc('rpc_tg_batches'); if(error) throw error;
-    TGB={list:Array.isArray(data)?data:[],at:Date.now()}; }
-  catch(e){ console.warn('[DIMAX] tg batches',e); TGB={list:[],at:Date.now()}; } // блок просто скрыт
+  const was=JSON.stringify([TGB&&TGB.list,TGR&&TGR.list]);
+  const ld=(fn,tag)=>SB.rpc(fn).then(({data,error})=>{ if(error) throw error; return Array.isArray(data)?data:[]; })
+    .catch(e=>{ console.warn('[DIMAX] '+tag,e); return []; }); // ошибка — блок просто скрыт
+  const [bl,rl]=await Promise.all([ld('rpc_tg_batches','tg batches'),ld('rpc_tg_repeats','tg repeats')]); // v26.77: вместе
+  TGB={list:bl,at:Date.now()}; TGR={list:rl,at:Date.now()};
   TGB_LOADING=false;
   if(TGBROW!=null&&!TGB.list.some(b=>String(b.batch)===String(TGBROW))) TGBROW=null;
-  if(VIEW==='stock'&&JSON.stringify(TGB.list)!==was) render();
+  if(TGRROW!=null&&!TGR.list.some(r=>String(r.id)===String(TGRROW))) TGRROW=null;
+  if(VIEW==='stock'&&JSON.stringify([TGB.list,TGR.list])!==was) render();
 }
 async function tgBatchCancel(batch){
   if(TGBUSY) return; TGBUSY=true; render();
   try{ const {data,error}=await SB.rpc('rpc_tg_batch_cancel',{p_batch:batch}); if(error) throw error;
     TGBUSY=false; TGASK=null; toast(tgFmt('tgBCancelled',{k:tgCards(+(data&&data.cancelled)||0)})); }
+  catch(e){ TGBUSY=false; TGASK=null; toastErr(e); }
+  render(); tgBatchesLoad();
+}
+async function tgRepeatCancel(rid){
+  if(TGBUSY) return; TGBUSY=true; render();
+  try{ const {error}=await SB.rpc('rpc_tg_repeat_cancel',{p_id:rid}); if(error) throw error;
+    TGBUSY=false; TGASK=null; toast(t('tgRStopped')); }
   catch(e){ TGBUSY=false; TGASK=null; toastErr(e); }
   render(); tgBatchesLoad();
 }
@@ -1689,12 +1709,27 @@ function tgItemSt(it){
   if(st==='cancelled') return {i:'✕',c:'var(--ink-3)',l:t('tgStCanc')};
   return {i:'⏳',c:'var(--ink-2)',l:t('tgStWait')+(it.at?' ('+tgTime(it.at)+')':'')};
 }
+function tgRepeatsBlock(){
+  if(!TGR||!TGR.list.length) return '';
+  return `<div class="sec-t" style="padding-top:0">${esc(t('tgDaily'))}</div>
+  <div class="list" style="margin:0 16px 10px">${TGR.list.map(r=>{
+    const id=String(r.id), open=String(TGRROW)===id, ask=TGASK==='rc:'+id, nx=r.nextAt?new Date(r.nextAt):null;
+    return `<div><button class="row" data-act="tgRRow" data-id="${esc(id)}">
+      <div class="grow"><div class="t" style="font-size:13.5px">${esc(tgFmt('tgRRow',{hm:nx&&!isNaN(nx)?tgHM(nx):'—',k:tgCards(+r.count||0),next:tgTime(r.nextAt)}))}</div></div>
+      <span style="flex:none;color:var(--ink-3)">${open?'▲':'▼'}</span></button>
+      ${ask?`<div style="padding:0 12px 10px"><div style="font-weight:600;font-size:13.5px;padding-bottom:6px">${esc(t('tgRAsk'))}</div>
+        <div style="display:flex;gap:8px"><button class="btn sm" data-act="tgYes" ${TGBUSY?'disabled':''}>${esc(TGBUSY?t('tgSending'):t('tgYes'))}</button>
+        <button class="btn ghost sm" data-act="tgNo" ${TGBUSY?'disabled':''}>${esc(t('tgNo'))}</button></div></div>`
+      :`<div style="padding:0 12px 8px"><button class="btn ghost sm" style="width:auto;padding:6px 12px;color:var(--bad)" data-act="tgRCancel" data-id="${esc(id)}" ${TGBUSY?'disabled':''}>${esc(t('tgBCancel'))}</button></div>`}
+      ${open?`<div style="padding:0 12px 10px 18px;font-size:12.5px">${(r.items||[]).map(it=>`<div style="padding:3px 0">${esc(it.name||'—')}</div>`).join('')}</div>`:''}
+    </div>`; }).join('')}</div>`;
+}
 function tgBatchesBlock(){
-  if(!TGBOPEN||!TGB||!TGB.list.length) return '';
-  return `<div class="list" style="margin:0 16px 10px">${TGB.list.map(b=>{
+  if(!TGBOPEN) return '';
+  return tgRepeatsBlock()+(!TGB||!TGB.list.length?'':`<div class="list" style="margin:0 16px 10px">${TGB.list.map(b=>{
     const id=String(b.batch), live=(+b.pending||0)>0, open=String(TGBROW)===id, ask=TGASK==='bc:'+id;
     return `<div style="${live?'':'opacity:.55'}"><button class="row" data-act="tgBRow" data-id="${esc(id)}">
-      <div class="grow"><div class="t" style="font-size:13.5px">${esc(tgFmt('tgBRow',{when:tgTime(b.at,true),k:tgCards(+b.total||0),p:+b.pending||0,s:+b.sent||0,f:+b.failed||0}))}</div></div>
+      <div class="grow"><div class="t" style="font-size:13.5px">${b.repeatId!=null?'🔁 ':''}${esc(tgFmt('tgBRow',{when:tgTime(b.at,true),k:tgCards(+b.total||0),p:+b.pending||0,s:+b.sent||0,f:+b.failed||0}))}</div></div>
       <span style="flex:none;color:var(--ink-3)">${open?'▲':'▼'}</span></button>
       ${live&&!ask?`<div style="padding:0 12px 8px"><button class="btn ghost sm" style="width:auto;padding:6px 12px;color:var(--bad)" data-act="tgBCancel" data-id="${esc(id)}" ${TGBUSY?'disabled':''}>${esc(t('tgBCancel'))}</button></div>`:''}
       ${live&&ask?`<div style="padding:0 12px 10px"><div style="font-weight:600;font-size:13.5px;padding-bottom:6px">${esc(t('tgBAsk'))}</div>
@@ -1703,7 +1738,7 @@ function tgBatchesBlock(){
       ${open?`<div style="padding:0 12px 10px 18px;font-size:12.5px">${(b.items||[]).slice().sort((x,y)=>(+x.seq||0)-(+y.seq||0)).map(it=>{ const st=tgItemSt(it);
         return `<div style="display:flex;gap:8px;padding:3px 0"><span style="flex:none;width:18px;color:${st.c}">${esc(st.i)}</span>
           <div style="flex:1;min-width:0"><div>${esc(it.name||'—')}</div><div style="color:${st.c};font-size:11.5px">${esc(st.l)}</div></div></div>`; }).join('')}</div>`:''}
-    </div>`; }).join('')}</div>`;
+    </div>`; }).join('')}</div>`);
 }
 const promoBadge=o=>can('settings')&&o&&o.promo?` <span style="font-size:10.5px;font-weight:600;color:var(--accent);background:var(--accent-soft);border-radius:6px;padding:1px 6px;white-space:nowrap">★ ${esc(t('promoBadge'))}</span>`:'';
 const tgOn=(kind,id)=>!!TGSEL&&TGSEL.some(x=>x.kind===kind&&x.id===id);
@@ -1718,10 +1753,10 @@ function tgCardBtn(kind,id){
 function tgTools(){
   if(!can('settings')) return '';
   if(!TGB||(!TGB_LOADING&&Date.now()-TGB.at>60000)) setTimeout(tgBatchesLoad,0); // без setInterval
-  const live=TGB?TGB.list.filter(b=>(+b.pending||0)>0).length:0;
+  const live=(TGB?TGB.list.filter(b=>(+b.pending||0)>0).length:0)+(TGR?TGR.list.length:0), anyB=(TGB&&TGB.list.length)||(TGR&&TGR.list.length);
   return `<div class="chips" style="padding-top:0"><button class="${PROMOF?'on':''}" data-act="promoF">★ ${esc(t('promoFilter'))}</button>
     <button class="${TGSEL?'on':''}" data-act="tgSel">${esc(t('tgSelect'))}</button>
-    ${TGB&&TGB.list.length?`<button class="${TGBOPEN?'on':''}" data-act="tgPlanned">${esc(t('tgPlanned'))} (${esc(live)})</button>`:''}</div>
+    ${anyB?`<button class="${TGBOPEN?'on':''}" data-act="tgPlanned">${esc(t('tgPlanned'))} (${esc(live)})</button>`:''}</div>
     ${TGSEL?`<div class="pad" style="padding:0 16px 8px;color:var(--ink-3);font-size:12px">${esc(t('tgPickHint'))}</div>`:''}
     ${tgBatchesBlock()}`;
 }
@@ -1736,6 +1771,8 @@ function tgSchedPanel(n){
   return `<div style="font-weight:600;font-size:14px;padding:2px 4px 8px">${esc(tgFmt('tgWhen',{n:tgCardsAcc(n)}))}</div>
     <div class="chips" style="padding:0 0 8px;flex-wrap:wrap">${opts.map(o=>`<button class="${TGSCHED.opt===o.k?'on':''}" data-act="tgOpt" data-v="${esc(o.k)}">${esc(o.l)}</button>`).join('')}</div>
     ${TGSCHED.opt==='custom'?`<div style="padding:0 0 8px"><input class="inp" type="datetime-local" data-tgat="1" value="${esc(TGSCHED.custom)}" min="${esc(tgLocalInput(dmin))}" max="${esc(tgLocalInput(dmax))}"></div>`:''}
+    <button class="row" style="padding:8px 4px;margin-bottom:6px;${now?'opacity:.5':''}" data-act="tgRep" ${now||TGBUSY?'disabled':''}>${tgBox(!now&&TGSCHED.repeat)}
+      <div class="grow"><div class="t" style="font-size:13px">${esc(t('tgRepeat'))}</div>${now?`<div class="s">${esc(t('tgRepeatHint'))}</div>`:''}</div></button>
     <div style="font-size:12px;color:var(--ink-3);padding:0 4px 8px">
       ${P>0&&at!==undefined&&!single?`<div>${esc(tgFmt('tgPerMin',{a:tgHM(start),b:tgHM(end)}))}</div>`:''}
       ${M>0?`<div style="color:var(--warn)">${esc(P>0?tgFmt('tgSkipN',{m:M}):t('tgNoneWithPhoto'))}</div>`:''}
@@ -1746,7 +1783,7 @@ function tgSchedPanel(n){
 function tgBar(){
   if(!TGSEL||!can('settings')) return '';
   const n=TGSEL.length, sched=TGASK==='multi'&&n>0;
-  return `<div style="height:${sched?(TGSCHED.opt==='custom'?300:240):84}px"></div><div class="cart-bar"><div style="background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;box-shadow:0 8px 24px -8px rgba(0,0,0,.4)">
+  return `<div style="height:${sched?(TGSCHED.opt==='custom'?360:300):84}px"></div><div class="cart-bar"><div style="background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;box-shadow:0 8px 24px -8px rgba(0,0,0,.4)">
     ${sched?tgSchedPanel(n)
     :`<div style="display:flex;gap:8px"><button class="btn sm" data-act="tgMultiAsk" ${!n||TGBUSY?'disabled':''}>${ic('send')} ${esc(t('tgPublishN'))} (${esc(n)})</button>
       <button class="btn ghost sm" style="width:auto;padding:10px 16px" data-act="tgSel" ${TGBUSY?'disabled':''}>${esc(t('tgSelCancel'))}</button></div>`}
@@ -6169,7 +6206,7 @@ function sheetIosInstall(){
 function render(){
   if(typeof CART!=='undefined'&&CART.length) cartSync(); // v26.70: базовая цена — всегда текущая из каталога
   if(TGSEL&&(VIEW!=='stock'||!ME||ME.role!=='admin')){ TGSEL=null; if(TGASK==='multi'&&!TGBUSY) TGASK=null; } // v26.74: ушли со «Склада» — выбор сброшен
-  if(TGASK&&TGASK.startsWith('bc:')&&VIEW!=='stock'&&!TGBUSY) TGASK=null; // v26.76
+  if(TGASK&&/^(bc|rc):/.test(TGASK)&&VIEW!=='stock'&&!TGBUSY) TGASK=null; // v26.76, v26.77
   document.documentElement.classList.toggle('noimgsave',!!(ME&&ME.role!=='admin')); // v26.62
   const app=document.getElementById('app');
   if(LOAD_CORRUPT_RAW){ app.innerHTML=screenCorruptRecovery(); return; }
@@ -6676,19 +6713,23 @@ document.addEventListener('click',e=>{
   if(a==='promoF'){ if(!can('settings')) return; PROMOF=!PROMOF; render(); return; }
   if(a==='tgAsk'){ if(!can('settings')||TGBUSY) return; TGASK=el.dataset.k+':'+id; render(); return; }
   if(a==='tgNo'){ if(TGBUSY) return; TGASK=null; render(); return; }
-  if(a==='tgMultiAsk'){ if(!can('settings')||TGBUSY||!TGSEL||!TGSEL.length) return; TGASK='multi'; TGSCHED={opt:'now',custom:''}; render(); return; }
+  if(a==='tgMultiAsk'){ if(!can('settings')||TGBUSY||!TGSEL||!TGSEL.length) return; TGASK='multi'; TGSCHED={opt:'now',custom:'',repeat:false}; render(); return; }
   // v26.76: панель времени — «Сейчас» (at=null) или момент по времени устройства (toISOString)
-  if(a==='tgOpt'){ if(!can('settings')||TGBUSY) return; TGSCHED.opt=el.dataset.v;
+  if(a==='tgOpt'){ if(!can('settings')||TGBUSY) return; TGSCHED.opt=el.dataset.v; if(TGSCHED.opt==='now') TGSCHED.repeat=false;
     if(TGSCHED.opt==='custom'&&!TGSCHED.custom) TGSCHED.custom=tgLocalInput(new Date(Date.now()+3600000)); render(); return; }
   if(a==='tgGo'){ if(!can('settings')||TGBUSY||TGASK!=='multi'||!TGSEL||!TGSEL.length) return;
     const at=tgSchedAt(); if(at===undefined){ toast(t('tgBadTime')); return; }
     if(at&&at.getTime()>Date.now()+60*864e5){ toast(t('tgBadTime')); return; }
-    tgPublish(TGSEL.slice(),true,at?at.toISOString():null); return; }
+    tgPublish(TGSEL.slice(),true,at?at.toISOString():null,!!(at&&TGSCHED.repeat)); return; }
+  if(a==='tgRep'){ if(!can('settings')||TGBUSY||TGSCHED.opt==='now') return; TGSCHED.repeat=!TGSCHED.repeat; render(); return; }
+  if(a==='tgRRow'){ if(!can('settings')) return; TGRROW=String(TGRROW)===id?null:id; render(); return; }
+  if(a==='tgRCancel'){ if(!can('settings')||TGBUSY) return; TGASK='rc:'+id; render(); return; }
   if(a==='tgPlanned'){ if(!can('settings')) return; TGBOPEN=!TGBOPEN; if(TGBOPEN) tgBatchesLoad(); render(); return; }
   if(a==='tgBRow'){ if(!can('settings')) return; TGBROW=String(TGBROW)===id?null:id; render(); return; }
   if(a==='tgBCancel'){ if(!can('settings')||TGBUSY) return; TGASK='bc:'+id; render(); return; }
   if(a==='tgYes'){ if(!can('settings')||TGBUSY) return;
     if(TGASK&&TGASK.startsWith('bc:')){ const b=TGASK.slice(3); if(/^\d+$/.test(b)) tgBatchCancel(+b); return; }
+    if(TGASK&&TGASK.startsWith('rc:')){ const r=TGASK.slice(3); if(/^\d+$/.test(r)) tgRepeatCancel(+r); return; }
     if(TGASK===el.dataset.k+':'+id) tgPublish([{kind:el.dataset.k,id}],false);
     return; }
   if(a==='tgSel'){ if(!can('settings')||TGBUSY) return; TGSEL=TGSEL?null:[]; TGASK=null; render(); return; }
