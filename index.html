@@ -426,7 +426,14 @@ ru:{
  promoToggle:"Для рекламы в Telegram", promoHint:"Автопостинг в @zapcas_bor 3 раза в день и пост при поступлении", promoBadge:"реклама", promoFilter:"Для рекламы",
  tgPublish:"Опубликовать в Telegram", tgAsk:"Опубликовать в канал @zapcas_bor?", tgYes:"Да", tgNo:"Нет", tgSending:"Публикуем…",
  tgDone:"Опубликовано в @zapcas_bor", tgFail:"Telegram не принял пост", tgPending:"Отправлено — ответ Telegram ещё не пришёл, проверьте канал",
- tgSelect:"Выбрать для Telegram", tgSelCancel:"Отмена", tgPublishN:"Опубликовать", tgMax:"Не больше 10 позиций за один пост", tgPickHint:"Отметьте до 10 позиций (запчасти и технику можно вместе)",
+ tgSelect:"Выбрать для Telegram", tgSelCancel:"Отмена", tgPublishN:"Опубликовать", tgPickHint:"Отметьте товары (запчасти и технику можно вместе). Больше 10 — уйдут альбомами по 10 каждые 30 минут",
+ tgAlbForms:"альбом|альбома|альбомов", tgPosForms:"позицию|позиции|позиций", tgAlbEvery:"≈ {k}, каждые 30 мин",
+ tgAskMany:"Опубликовать {n}? {k}: первый сразу, остальные каждые 30 минут.",
+ tgDoneFirst:"Опубликован 1-й альбом из {kn}. Остальные ({r}) — в очереди, последний ≈ {last}",
+ tgFailRest:" — остальные альбомы очередь отправит по расписанию", tgQueuedOnly:"Очередь уже идёт — добавлено {k}: первый ≈ {first}, последний ≈ {last}",
+ tgQLine:"Очередь Telegram: {k} · следующий ≈ {next} · последний ≈ {last}", tgQStop:"Остановить",
+ tgQAsk:"Остановить очередь? Уже опубликованные посты останутся.", tgQStopped:"Очередь остановлена: отменено {k}",
+ tgQFailed:"⚠ За сутки не опубликовано альбомов: {x} — причина пришла вам в Telegram",
  loansTab:"Долги", loansToUs:"Нам должны", loansFromUs:"Мы должны", loanOpen:"Открытые", loanClosed:"Закрытые", loanAll:"Все",
  loanOpenSt:"Открыт", loanClosedSt:"Закрыт", loanCancelledSt:"Отменён", loanTook:"взял", loanReturnBy:"вернуть до",
  loanAmount:"Сумма", loanPaid:"Выплачено", loanRemain:"Остаток", loanNew:"Новый долг", loanEdit:"Изменить", loanCancel:"Отменить долг",
@@ -693,7 +700,14 @@ uz:{
  promoToggle:"Telegramda reklama uchun", promoHint:"@zapcas_bor kanaliga kuniga 3 marta avtopost va kelganda post", promoBadge:"reklama", promoFilter:"Reklama uchun",
  tgPublish:"Telegramga joylash", tgAsk:"@zapcas_bor kanaliga joylansinmi?", tgYes:"Ha", tgNo:"Yo‘q", tgSending:"Joylanmoqda…",
  tgDone:"@zapcas_bor kanaliga joylandi", tgFail:"Telegram postni qabul qilmadi", tgPending:"Yuborildi — Telegram javobi hali kelmadi, kanalni tekshiring",
- tgSelect:"Telegram uchun tanlash", tgSelCancel:"Bekor qilish", tgPublishN:"Joylash", tgMax:"Bitta postda 10 tadan ko‘p emas", tgPickHint:"10 tagacha belgilang (qism va texnikani birga tanlash mumkin)",
+ tgSelect:"Telegram uchun tanlash", tgSelCancel:"Bekor qilish", tgPublishN:"Joylash", tgPickHint:"Mahsulotlarni belgilang (qism va texnikani birga tanlash mumkin). 10 tadan ko‘p bo‘lsa — har 30 daqiqada 10 tadan albom bo‘lib joylanadi",
+ tgAlbForms:"ta albom|ta albom|ta albom", tgPosForms:"ta mahsulot|ta mahsulot|ta mahsulot", tgAlbEvery:"≈ {k}, har 30 daqiqada",
+ tgAskMany:"{n} joylansinmi? {k}: birinchisi darhol, qolganlari har 30 daqiqada.",
+ tgDoneFirst:"{kn} ta albomdan 1-chisi joylandi. Qolgan {r} tasi navbatda, oxirgisi ≈ {last}",
+ tgFailRest:" — qolgan albomlarni navbat jadval bo‘yicha yuboradi", tgQueuedOnly:"Navbat allaqachon ishlayapti — {k} qo‘shildi: birinchisi ≈ {first}, oxirgisi ≈ {last}",
+ tgQLine:"Telegram navbati: {k} · keyingisi ≈ {next} · oxirgisi ≈ {last}", tgQStop:"To‘xtatish",
+ tgQAsk:"Navbat to‘xtatilsinmi? Joylangan postlar qoladi.", tgQStopped:"Navbat to‘xtatildi: {k} bekor qilindi",
+ tgQFailed:"⚠ Bir sutkada joylanmagan albomlar: {x} — sababi sizga Telegramda yuborildi",
  loansTab:"Qarzlar", loansToUs:"Bizga qarzdor", loansFromUs:"Biz qarzdormiz", loanOpen:"Ochiq", loanClosed:"Yopilgan", loanAll:"Hammasi",
  loanOpenSt:"Ochiq", loanClosedSt:"Yopilgan", loanCancelledSt:"Bekor qilingan", loanTook:"oldi", loanReturnBy:"qaytarish muddati",
  loanAmount:"Summa", loanPaid:"Toʻlangan", loanRemain:"Qoldiq", loanNew:"Yangi qarz", loanEdit:"Oʻzgartirish", loanCancel:"Qarzni bekor qilish",
@@ -1508,8 +1522,11 @@ async function setProductPhoto(o,file){
 // ── v26.74: реклама в Telegram (только Владелец). products/models.promo — товар участвует в автопостинге
 // (3 раза в день и «новое поступление» делает база); promo_photo_url — подписанная ссылка на фото на 1 год,
 // база берёт фото для автопостов только оттуда. Ручная публикация — rpc_tg_post с короткой ссылкой (1 ч).
-const PROMO_TTL=31536000, PROMO_RENEW_MS=300*864e5, TG_PHOTO_TTL=3600;
+const PROMO_TTL=31536000, PROMO_RENEW_MS=300*864e5, TG_PHOTO_TTL=3600, TG_QUEUE_PHOTO_TTL=604800;
+// русские формы по числу: [1, 2–4, 5+] (альбом/альбома/альбомов); вынесено из суммы прописью (v26.75)
+const plRu=(x,f)=>{const a=x%100,b=x%10; if(a>10&&a<20) return f[2]; if(b===1) return f[0]; if(b>1&&b<5) return f[1]; return f[2];};
 let TGSEL=null, TGASK=null, TGBUSY=false, PROMOF=false, EDITPROMO=false; // TGSEL=null — режим выбора выключен
+let TGQ=null, TGQ_LOADING=false; // v26.75: состояние очереди альбомов {pending,nextAt,lastAt,failed24h,at}
 // где лежит фото: запчасти — бакет product-photos (ключ) или старый app-photos; техника — app-photos.
 // Старые публичные ссылки не из product-photos подписать нельзя — для Telegram такое фото не годится.
 function promoSrc(kind,pp){
@@ -1562,26 +1579,83 @@ async function promoMaintain(){
   }catch(e){ console.warn('[DIMAX] promo maintain',e); }
 }
 // публикация 1–10 позиций: короткие ссылки на фото → rpc_tg_post → ждём ответ Telegram (6 × 1,5 с)
+// v26.75: >10 позиций — база режет на альбомы по 10: первый сразу, остальные каждые 30 мин (очередь)
+const tgFmt=(k,o)=>t(k).replace(/\{(\w+)\}/g,(m,x)=>o[x]!=null?o[x]:'');
+const tgAlb=k=>k+' '+plRu(k,t('tgAlbForms').split('|'));
+const tgPos=n=>n+' '+plRu(n,t('tgPosForms').split('|'));
+function tgTime(iso){ // HH:MM, не сегодня — DD.MM HH:MM
+  const d=iso?new Date(iso):null; if(!d||isNaN(d)) return '—';
+  const p2=x=>String(x).padStart(2,'0'), hm=p2(d.getHours())+':'+p2(d.getMinutes());
+  return d.toDateString()===new Date().toDateString()?hm:p2(d.getDate())+'.'+p2(d.getMonth()+1)+' '+hm;
+}
+// подписываем фото пачками по бакетам (как promoMaintain); ошибка бакета — исключение, ошибка одного файла — без фото
+async function tgSignPhotos(items,ttl){
+  const want=[]; items.forEach(it=>{ const o=it.kind==='machine'?modl(it.id):prod(it.id); const src=o&&promoSrc(it.kind,o.photoPath); if(src) want.push(src); });
+  const urls={};
+  for(const b of [PRODUCT_PHOTO_BUCKET,'app-photos']){
+    const ps=[...new Set(want.filter(w=>w.b===b).map(w=>w.p))];
+    for(let i=0;i<ps.length;i+=100){
+      const {data,error}=await SB.storage.from(b).createSignedUrls(ps.slice(i,i+100),ttl);
+      if(error) throw error;
+      (data||[]).forEach(d=>{ if(d.signedUrl) urls[b+'|'+d.path]=d.signedUrl; else console.warn('[DIMAX] tg photo',d.path,d.error); }); } }
+  return urls;
+}
 async function tgPublish(items,multi){
   if(TGBUSY||!items.length) return; TGBUSY=true; render();
   try{
+    const urls=await tgSignPhotos(items,items.length>10?TG_QUEUE_PHOTO_TTL:TG_PHOTO_TTL);
     const list=[];
-    for(const it of items){ const o=it.kind==='machine'?modl(it.id):prod(it.id); if(!o) continue;
-      const x={kind:it.kind,id:it.id}; const u=await promoSign(it.kind,o.photoPath,TG_PHOTO_TTL); if(u) x.photo=u; list.push(x); }
+    for(const it of items){ const o=it.kind==='machine'?modl(it.id):prod(it.id); if(!o) continue; // порядок выбора сохраняется
+      const x={kind:it.kind,id:it.id}, src=promoSrc(it.kind,o.photoPath); if(src&&urls[src.b+'|'+src.p]) x.photo=urls[src.b+'|'+src.p]; list.push(x); }
     if(!list.length) throw new Error(t('nothing'));
     const {data,error}=await SB.rpc('rpc_tg_post',{p:{items:list}});
     if(error) throw error;
-    const req=data&&data.reqId; let res=null;
+    const req=data&&data.reqId, queued=+(data&&data.queued)||0, albums=+(data&&data.albums)||1;
+    let res=null;
     for(let i=0;i<6&&req!=null&&!res;i++){
       await new Promise(r=>setTimeout(r,1500));
       const q=await SB.rpc('rpc_tg_post_result',{p_req:req});
       if(q.error) throw q.error;
       if(q.data&&q.data.done) res=q.data; }
     TGBUSY=false; TGASK=null;
-    if(res&&res.ok){ if(multi) TGSEL=null; toast(t('tgDone')); }
-    else toast('⚠ '+(res?(res.error||t('tgFail')):t('tgPending')));
+    if(queued>0&&req==null){ if(multi) TGSEL=null; // очередь уже шла — всё встало за ней
+      toast(tgFmt('tgQueuedOnly',{k:tgAlb(albums),first:tgTime(data.firstAt),last:tgTime(data.lastAt)})); }
+    else if(res&&res.ok){ if(multi) TGSEL=null;
+      toast(queued>0?tgFmt('tgDoneFirst',{kn:albums,r:albums-1,last:tgTime(data.lastAt)}):t('tgDone')); }
+    else{ if(queued>0&&multi) TGSEL=null; // очередь в базе уже создана — повторная публикация задвоила бы её
+      toast('⚠ '+(res?(res.error||t('tgFail')):t('tgPending'))+(queued>0?t('tgFailRest'):'')); }
   }catch(e){ TGBUSY=false; TGASK=null; toastErr(e); }
-  render();
+  render(); tgQueueLoad();
+}
+// v26.75: статус очереди — при входе на «Склад», после публикации/остановки и при перерисовке, если старше 60 с
+async function tgQueueLoad(){
+  if(!(ME&&ME.role==='admin')||!SB||TGQ_LOADING) return; TGQ_LOADING=true;
+  const was=TGQ?JSON.stringify([TGQ.pending,TGQ.nextAt,TGQ.lastAt,TGQ.failed24h]):'';
+  try{ const {data,error}=await SB.rpc('rpc_tg_queue_status'); if(error) throw error;
+    const d=data||{}; TGQ={pending:+d.pending||0,nextAt:d.nextAt||null,lastAt:d.lastAt||null,failed24h:+d.failed24h||0,at:Date.now()}; }
+  catch(e){ console.warn('[DIMAX] tg queue status',e); TGQ={pending:0,nextAt:null,lastAt:null,failed24h:0,at:Date.now()}; } // блок просто скрыт
+  TGQ_LOADING=false;
+  if(VIEW==='stock'&&JSON.stringify([TGQ.pending,TGQ.nextAt,TGQ.lastAt,TGQ.failed24h])!==was) render();
+}
+async function tgQueueCancel(){
+  if(TGBUSY) return; TGBUSY=true; render();
+  try{ const {data,error}=await SB.rpc('rpc_tg_queue_cancel'); if(error) throw error;
+    TGBUSY=false; TGASK=null; toast(tgFmt('tgQStopped',{k:tgAlb(+(data&&data.cancelled)||0)})); }
+  catch(e){ TGBUSY=false; TGASK=null; toastErr(e); }
+  render(); tgQueueLoad();
+}
+function tgQueueBlock(){
+  if(!TGQ||!TGQ_LOADING&&Date.now()-TGQ.at>60000) setTimeout(tgQueueLoad,0); // без setInterval
+  if(!TGQ||(!TGQ.pending&&!TGQ.failed24h)) return '';
+  return `<div class="pad" style="padding:0 16px 8px;font-size:12.5px">
+    ${TGQ.pending?`<div style="display:flex;align-items:center;gap:8px;color:var(--ink-2)">
+      <div style="flex:1">${esc(tgFmt('tgQLine',{k:tgAlb(TGQ.pending),next:tgTime(TGQ.nextAt),last:tgTime(TGQ.lastAt)}))}</div>
+      ${TGASK==='qstop'?'':`<button class="btn ghost sm" style="width:auto;padding:6px 12px" data-act="tgQStop" ${TGBUSY?'disabled':''}>${esc(t('tgQStop'))}</button>`}</div>
+      ${TGASK==='qstop'?`<div style="font-weight:600;padding:8px 0 6px">${esc(t('tgQAsk'))}</div>
+      <div style="display:flex;gap:8px"><button class="btn sm" data-act="tgYes" ${TGBUSY?'disabled':''}>${esc(TGBUSY?t('tgSending'):t('tgYes'))}</button>
+      <button class="btn ghost sm" data-act="tgNo" ${TGBUSY?'disabled':''}>${esc(t('tgNo'))}</button></div>`:''}`:''}
+    ${TGQ.failed24h?`<div style="color:var(--warn);padding-top:4px">${esc(tgFmt('tgQFailed',{x:TGQ.failed24h}))}</div>`:''}
+  </div>`;
 }
 const promoBadge=o=>can('settings')&&o&&o.promo?` <span style="font-size:10.5px;font-weight:600;color:var(--accent);background:var(--accent-soft);border-radius:6px;padding:1px 6px;white-space:nowrap">★ ${esc(t('promoBadge'))}</span>`:'';
 const tgOn=(kind,id)=>!!TGSEL&&TGSEL.some(x=>x.kind===kind&&x.id===id);
@@ -1597,17 +1671,19 @@ function tgTools(){
   if(!can('settings')) return '';
   return `<div class="chips" style="padding-top:0"><button class="${PROMOF?'on':''}" data-act="promoF">★ ${esc(t('promoFilter'))}</button>
     <button class="${TGSEL?'on':''}" data-act="tgSel">${esc(t('tgSelect'))}</button></div>
-    ${TGSEL?`<div class="pad" style="padding:0 16px 8px;color:var(--ink-3);font-size:12px">${esc(t('tgPickHint'))}</div>`:''}`;
+    ${TGSEL?`<div class="pad" style="padding:0 16px 8px;color:var(--ink-3);font-size:12px">${esc(t('tgPickHint'))}</div>`:''}
+    ${tgQueueBlock()}`;
 }
 function tgBar(){
   if(!TGSEL||!can('settings')) return '';
-  const n=TGSEL.length;
-  return `<div style="height:84px"></div><div class="cart-bar"><div style="background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;box-shadow:0 8px 24px -8px rgba(0,0,0,.4)">
-    ${TGASK==='multi'?`<div style="font-weight:600;font-size:14px;padding:2px 4px 8px">${esc(t('tgAsk'))} (${esc(n)})</div>
+  const n=TGSEL.length, K=Math.ceil(n/10);
+  return `<div style="height:${n>10?104:84}px"></div><div class="cart-bar"><div style="background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;box-shadow:0 8px 24px -8px rgba(0,0,0,.4)">
+    ${TGASK==='multi'?`<div style="font-weight:600;font-size:14px;padding:2px 4px 8px">${esc(n>10?tgFmt('tgAskMany',{n:tgPos(n),k:tgAlb(K)}):t('tgAsk')+' ('+n+')')}</div>
       <div style="display:flex;gap:8px"><button class="btn sm" data-act="tgYes" ${TGBUSY?'disabled':''}>${esc(TGBUSY?t('tgSending'):t('tgYes'))}</button>
       <button class="btn ghost sm" data-act="tgNo" ${TGBUSY?'disabled':''}>${esc(t('tgNo'))}</button></div>`
     :`<div style="display:flex;gap:8px"><button class="btn sm" data-act="tgMultiAsk" ${!n||TGBUSY?'disabled':''}>${ic('send')} ${esc(t('tgPublishN'))} (${esc(n)})</button>
-      <button class="btn ghost sm" style="width:auto;padding:10px 16px" data-act="tgSel" ${TGBUSY?'disabled':''}>${esc(t('tgSelCancel'))}</button></div>`}
+      <button class="btn ghost sm" style="width:auto;padding:10px 16px" data-act="tgSel" ${TGBUSY?'disabled':''}>${esc(t('tgSelCancel'))}</button></div>
+      ${n>10?`<div style="font-size:12px;color:var(--ink-3);padding:6px 4px 0">${esc(tgFmt('tgAlbEvery',{k:tgAlb(K)}))}</div>`:''}`}
   </div></div>`;
 }
 async function setSettingsImage(key,dataUrl){
@@ -3410,7 +3486,7 @@ function rusWords(n){
   const des=['','','двадцать','тридцать','сорок','пятьдесят','шестьдесят','семьдесят','восемьдесят','девяносто'];
   const sot=['','сто','двести','триста','четыреста','пятьсот','шестьсот','семьсот','восемьсот','девятьсот'];
   const forms=[['','',''],['тысяча','тысячи','тысяч'],['миллион','миллиона','миллионов'],['миллиард','миллиарда','миллиардов'],['триллион','триллиона','триллионов']];
-  const pick=(x,f)=>{const a=x%100,b=x%10; if(a>10&&a<20) return f[2]; if(b===1) return f[0]; if(b>1&&b<5) return f[1]; return f[2];};
+  const pick=plRu;
   const trio=(x,fem)=>{const w=[]; const s=Math.floor(x/100), t=Math.floor((x%100)/10), u=x%10;
     if(s) w.push(sot[s]);
     if(t===1) w.push(d10[u]); else { if(t) w.push(des[t]); if(u) w.push((fem?edF:ed)[u]); }
@@ -6027,6 +6103,7 @@ function sheetIosInstall(){
 function render(){
   if(typeof CART!=='undefined'&&CART.length) cartSync(); // v26.70: базовая цена — всегда текущая из каталога
   if(TGSEL&&(VIEW!=='stock'||!ME||ME.role!=='admin')){ TGSEL=null; if(TGASK==='multi'&&!TGBUSY) TGASK=null; } // v26.74: ушли со «Склада» — выбор сброшен
+  if(TGASK==='qstop'&&VIEW!=='stock'&&!TGBUSY) TGASK=null; // v26.75
   document.documentElement.classList.toggle('noimgsave',!!(ME&&ME.role!=='admin')); // v26.62
   const app=document.getElementById('app');
   if(LOAD_CORRUPT_RAW){ app.innerHTML=screenCorruptRecovery(); return; }
@@ -6220,7 +6297,7 @@ document.addEventListener('click',e=>{
     return; }
   if(a==='sellerTogglePw'){ if(!can('settings')) return;
     if(REVEAL_PW.has(id)) REVEAL_PW.delete(id); else REVEAL_PW.add(id); render(); return; }
-  if(a==='go'){ VIEW=el.dataset.v; SHEET=null; render(); window.scrollTo(0,0); return; }
+  if(a==='go'){ VIEW=el.dataset.v; SHEET=null; render(); window.scrollTo(0,0); if(VIEW==='stock') tgQueueLoad(); return; }
   if(a==='stab'){ STAB=el.dataset.v; SQ=''; S1=''; render(); return; }
   if(a==='wtab'){ WTAB=el.dataset.v; SC1=''; SKQ=''; render(); return; }
   if(a==='s1'){ S1=id; render(); return; }
@@ -6533,15 +6610,17 @@ document.addEventListener('click',e=>{
   if(a==='promoF'){ if(!can('settings')) return; PROMOF=!PROMOF; render(); return; }
   if(a==='tgAsk'){ if(!can('settings')||TGBUSY) return; TGASK=el.dataset.k+':'+id; render(); return; }
   if(a==='tgNo'){ if(TGBUSY) return; TGASK=null; render(); return; }
+  if(a==='tgQStop'){ if(!can('settings')||TGBUSY) return; TGASK='qstop'; render(); return; }
   if(a==='tgMultiAsk'){ if(!can('settings')||TGBUSY||!TGSEL||!TGSEL.length) return; TGASK='multi'; render(); return; }
   if(a==='tgYes'){ if(!can('settings')||TGBUSY) return;
+    if(TGASK==='qstop'){ tgQueueCancel(); return; }
     if(TGASK==='multi'){ if(TGSEL&&TGSEL.length) tgPublish(TGSEL.slice(),true); }
     else if(TGASK===el.dataset.k+':'+id) tgPublish([{kind:el.dataset.k,id}],false);
     return; }
   if(a==='tgSel'){ if(!can('settings')||TGBUSY) return; TGSEL=TGSEL?null:[]; TGASK=null; render(); return; }
   if(a==='tgPick'){ if(!can('settings')||!TGSEL||TGBUSY) return; const k=el.dataset.k==='machine'?'machine':'part';
     const ix=TGSEL.findIndex(x=>x.kind===k&&x.id===id);
-    if(ix>=0) TGSEL.splice(ix,1); else if(TGSEL.length>=10){ toast(t('tgMax')); return; } else TGSEL.push({kind:k,id});
+    if(ix>=0) TGSEL.splice(ix,1); else TGSEL.push({kind:k,id}); // v26.75: без лимита — >10 уходят очередью альбомов
     if(TGASK==='multi') TGASK=null; render(); return; }
   if(a==='skGrp'){ SKEXP=SKEXP===id?null:id; render(); return; }
   if(a==='newUnit'||a==='newUnitAsk'){ if(!can('cost')){ toast(t('noAccess')); return; } SHEET=()=>sheetNewUnit(id||null); render(); return; }
