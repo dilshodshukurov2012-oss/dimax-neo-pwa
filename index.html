@@ -423,6 +423,19 @@ setTimeout(window.hideSplash,15000);
 /* ============ i18n ============ */
 const T = {
 ru:{
+ loansTab:"Долги", loansToUs:"Нам должны", loansFromUs:"Мы должны", loanOpen:"Открытые", loanClosed:"Закрытые", loanAll:"Все",
+ loanOpenSt:"Открыт", loanClosedSt:"Закрыт", loanCancelledSt:"Отменён", loanTook:"взял", loanReturnBy:"вернуть до",
+ loanAmount:"Сумма", loanPaid:"Выплачено", loanRemain:"Остаток", loanNew:"Новый долг", loanEdit:"Изменить", loanCancel:"Отменить долг",
+ loanCancelAsk:"Отменить этот долг? Изменить его потом будет нельзя.", loanAddPay:"Добавить выплату", loanPays:"Выплаты",
+ loanNoPays:"Выплат пока нет", loanUndoAsk:"Отменить эту выплату?", loanUndo:"Отменить", loanYes:"Да", loanNo:"Нет",
+ loanDir:"Кто должен", loanPerson:"Кто (имя / компания)", loanCur:"Валюта", loanTakenAt:"Дата долга", loanDueAt:"Вернуть до",
+ loanPayDate:"Дата выплаты", loanErrPerson:"Укажите, кто должен (до 120 символов)",
+ loanErrAmount:"Сумма должна быть больше нуля (не больше 2 знаков после точки)", loanErrDate:"Укажите дату",
+ loanErrDue:"Срок возврата не может быть раньше даты долга", loanErrPayMax:"Сумма больше остатка",
+ loanErrPayDate:"Дата выплаты не может быть раньше даты долга", loanErrBelowPaid:"Сумма не может быть меньше уже выплаченного",
+ loanClientsGoods:"Клиенты за товар", loanSaleOn:"продажа", loanAcceptPay:"Принять оплату", loanOverdueCard:"Долги: просрочено",
+ loanEmpty:"Долгов нет", loanToday:"сегодня", loanTomorrow:"завтра", loanNotReady:"Раздел «Долги» ещё не подключён к базе",
+ loanOpenDebts:"Открытые долги",
  pick:"Выберите сотрудника",
  admin:"Администратор", manager:"Менеджер филиала", seller:"Продавец",
  home:"Главная", sale:"Продажа", stock:"Склад", more:"Ещё",
@@ -673,6 +686,19 @@ ru:{
  remitNothingToSend:"Сдавать нечего", remitHistoryTitle:"Сдача выручки", remitNoneYet:"Сдач ещё не было"
 },
 uz:{
+ loansTab:"Qarzlar", loansToUs:"Bizga qarzdor", loansFromUs:"Biz qarzdormiz", loanOpen:"Ochiq", loanClosed:"Yopilgan", loanAll:"Hammasi",
+ loanOpenSt:"Ochiq", loanClosedSt:"Yopilgan", loanCancelledSt:"Bekor qilingan", loanTook:"oldi", loanReturnBy:"qaytarish muddati",
+ loanAmount:"Summa", loanPaid:"Toʻlangan", loanRemain:"Qoldiq", loanNew:"Yangi qarz", loanEdit:"Oʻzgartirish", loanCancel:"Qarzni bekor qilish",
+ loanCancelAsk:"Bu qarz bekor qilinsinmi? Keyin uni oʻzgartirib boʻlmaydi.", loanAddPay:"Toʻlov qoʻshish", loanPays:"Toʻlovlar",
+ loanNoPays:"Hali toʻlov yoʻq", loanUndoAsk:"Bu toʻlov bekor qilinsinmi?", loanUndo:"Bekor qilish", loanYes:"Ha", loanNo:"Yoʻq",
+ loanDir:"Kim qarzdor", loanPerson:"Kim (ism / kompaniya)", loanCur:"Valyuta", loanTakenAt:"Qarz sanasi", loanDueAt:"Qaytarish muddati",
+ loanPayDate:"Toʻlov sanasi", loanErrPerson:"Kim qarzdorligini kiriting (120 belgigacha)",
+ loanErrAmount:"Summa noldan katta boʻlishi kerak (nuqtadan keyin 2 belgigacha)", loanErrDate:"Sanani kiriting",
+ loanErrDue:"Qaytarish muddati qarz sanasidan oldin boʻlishi mumkin emas", loanErrPayMax:"Summa qoldiqdan katta",
+ loanErrPayDate:"Toʻlov sanasi qarz sanasidan oldin boʻlishi mumkin emas", loanErrBelowPaid:"Summa toʻlangandan kam boʻlishi mumkin emas",
+ loanClientsGoods:"Mahsulot uchun mijozlar", loanSaleOn:"savdo", loanAcceptPay:"Toʻlov qabul qilish", loanOverdueCard:"Qarzlar: muddati oʻtgan",
+ loanEmpty:"Qarzlar yoʻq", loanToday:"bugun", loanTomorrow:"ertaga", loanNotReady:"«Qarzlar» boʻlimi hali bazaga ulanmagan",
+ loanOpenDebts:"Ochiq qarzlar",
  pick:"Xodimni tanlang",
  admin:"Administrator", manager:"Filial menejeri", seller:"Sotuvchi",
  home:"Asosiy", sale:"Savdo", stock:"Ombor", more:"Yana",
@@ -1188,6 +1214,10 @@ const TBL=['settings','branches','warehouses','categories','mgroups','products',
   'product_costs','model_costs','unit_costs','clients','suppliers','firms','users','user_directory','sales','sale_items','sale_docs','sale_markups','sale_item_markups',
   'sale_item_costs','sale_costs','purchases','purchase_items','moves','payments','expenses','pendings','docs','writeoffs',
   'inv_alerts','part_alerts','staff_debts','remits','inventories'];
+// v26.72: «Долги» — только Владелец. Продавцы эти таблицы вообще не запрашивают (ни загрузка, ни realtime).
+const OWNER_TBL=['loans','loan_payments'];
+let LOANS_OK=true; // false — миграция v26.72 ещё не применена (таблиц нет)
+const myTbl=()=>ME&&ME.role==='admin'?TBL.concat(OWNER_TBL):TBL;
 const KEYCOL={sale_docs:'sale_id',sale_markups:'sale_id',sale_item_markups:'sale_item_id',firms:'inn',product_costs:'product_id',model_costs:'model_id',unit_costs:'unit_id',sale_item_costs:'sale_item_id',sale_costs:'sale_id'};
 // PostgREST отдаёт не больше 1000 строк за запрос — читаем постранично, в стабильном порядке ключа
 async function sbAll(table){
@@ -1247,14 +1277,26 @@ function buildDB(){
     users, suppliers:R('suppliers').map(rowIn), sales, moves:R('moves').map(rowIn).sort((a,b)=>b.at-a.at), payments:R('payments').map(rowIn),
     expenses:R('expenses').map(rowIn), pendings:R('pendings').map(rowIn), docs:R('docs').map(rowIn), firms, purchases,
     writeoffs:R('writeoffs').map(rowIn), invAlerts:R('inv_alerts').map(rowIn), remits:R('remits').map(rowIn), staffDebts:R('staff_debts').map(rowIn),
-    inventories:R('inventories').map(rowIn), partAlerts:R('part_alerts').map(rowIn), seq:+(s0.saleSeq||1000), cleanSeed:true};
+    inventories:R('inventories').map(rowIn), partAlerts:R('part_alerts').map(rowIn), loans:buildLoans(R('loans'),R('loan_payments')), seq:+(s0.saleSeq||1000), cleanSeed:true};
   if(ME){ const me=DB.users.find(u=>u.id===ME.id); if(me) ME=me; }
   L=DB.settings.lang||'ru'; applyTheme();
 }
 function emptyDB(){ RAW={}; buildDB(); }
+// v26.72: долги Владельца. Даты (taken_at, due_at, paid_at) храним строками 'YYYY-MM-DD' — без часовых поясов.
+function buildLoans(rows,pays){
+  const r2=n=>Math.round(n*100)/100, by={};
+  pays.forEach(r=>{ (by[r.loan_id]=by[r.loan_id]||[]).push({id:r.id,amount:+r.amount||0,paidDate:String(r.paid_at||''),comment:r.comment||'',at:Date.parse(r.created_at)||0}); });
+  return rows.map(r=>{ const ps=(by[r.id]||[]).sort((a,b)=>a.paidDate<b.paidDate?-1:a.paidDate>b.paidDate?1:a.at-b.at);
+    const amount=+r.amount||0, paid=r2(ps.reduce((a,p)=>a+p.amount,0));
+    return {id:r.id,direction:r.direction,person:r.person||'',phone:r.phone||'',amount,cur:r.cur==='USD'?'USD':'UZS',
+      takenDate:String(r.taken_at||''),dueDate:r.due_at?String(r.due_at):'',comment:r.comment||'',status:r.status,
+      createdAt:Date.parse(r.created_at)||0,pays:ps,paid,rem:Math.max(0,r2(amount-paid))}; });
+}
 async function loadTables(list){
   // sale_docs — новая таблица (аудит, 2026-10-11): если миграция ещё не применена, грузимся без неё, а не падаем.
-  const res=await Promise.all(list.map(tb=>sbAll(tb).catch(e=>{ if(tb==='sale_docs'){ console.warn('[DIMAX] sale_docs',e); return []; } throw e; }).then(rows=>[tb,rows])));
+  if(!(ME&&ME.role==='admin')){ list=list.filter(tb=>!OWNER_TBL.includes(tb)); OWNER_TBL.forEach(tb=>{ delete RAW[tb]; }); } // после выхода Владельца не держим его долги в памяти
+  const res=await Promise.all(list.map(tb=>sbAll(tb).then(rows=>{ if(OWNER_TBL.includes(tb)) LOANS_OK=true; return rows; }).catch(e=>{ if(tb==='sale_docs'){ console.warn('[DIMAX] sale_docs',e); return []; }
+    if(OWNER_TBL.includes(tb)){ console.warn('[DIMAX] '+tb,e); LOANS_OK=false; return []; } throw e; }).then(rows=>[tb,rows])));
   res.forEach(([tb,rows])=>{ RAW[tb]=rows; });
   const paths=[], ppk=[]; (RAW.products||[]).forEach(r=>{ const k=ppKey(r.photo_path); if(k) ppk.push(k); else if(r.photo_path&&!/^https?:/.test(r.photo_path)) paths.push(r.photo_path); });
   (RAW.categories||[]).forEach(r=>{ const k=ppKey(r.photo_path); if(k) ppk.push(k); }); // v26.67: фото категорий
@@ -1266,7 +1308,7 @@ async function loadTables(list){
 }
 const loadRemote=()=>loadTables(TBL);
 // После своей записи — перечитываем затронутые таблицы и перерисовываем (Realtime тоже придёт, но не ждём его).
-async function refresh(list){ try{ await loadTables(list||TBL); }catch(e){ toastErr(e); } render(); }
+async function refresh(list){ try{ await loadTables(list||myTbl()); }catch(e){ toastErr(e); } render(); }
 const typing=()=>{ const a=document.activeElement; return !!(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)); };
 // Realtime: по каналу на таблицу (один общий канал на 35 таблиц сервер так и не подтверждал — проверено).
 // Все каналы идут через одно WebSocket-соединение; RLS применяется к каждому подписчику.
@@ -1285,7 +1327,7 @@ function subscribeRealtime(){
       render();
     },400);
   };
-  TBL.forEach(tb=>{
+  myTbl().forEach(tb=>{
     const ch=SB.channel('dimax-'+tb).on('postgres_changes',{event:'*',schema:'public',table:tb},onChange(tb))
       .subscribe((st,err)=>{ if(st!=='SUBSCRIBED') console.warn('[DIMAX] realtime',tb,st,err||''); });
     RTS.push(ch);
@@ -1338,6 +1380,7 @@ async function enterApp(session){
   const me=DB.users.find(u=>u.authUserId===session.user.id);
   if(!me){ await SB.auth.signOut(); ME=null; emptyDB(); toast('⚠ '+t('noProfileErr')); return false; }
   ME=me; VIEW='home'; SWH=ME.whId;
+  if(ME.role==='admin'){ try{ await loadTables(OWNER_TBL); }catch(e){ console.warn('[DIMAX] loans',e); } } // v26.72
   // Realtime должен подключиться С ТОКЕНОМ пользователя: сразу после входа клиент ещё «anon», а anon по RLS не
   // получает ни одного события (молча). Поэтому сначала передаём токен сессии, потом подписываемся.
   try{ if(SB.realtime&&SB.realtime.setAuth) await SB.realtime.setAuth(session.access_token); }catch(e){ console.warn('[DIMAX] realtime auth',e); }
@@ -1467,14 +1510,14 @@ function captureSellerDraft(){ if(!SELLERFORM||SELLEREDIT) return; const g=i=>{ 
 async function rpc(fn,args,reload){
   const {data,error}=await SB.rpc(fn,args||{});
   if(error){ toastErr(error); return {error}; }
-  if(reload!==false) await refresh(reload||TBL);
+  if(reload!==false) await refresh(reload||myTbl());
   return {data};
 }
 // Прямая запись в таблицу (простые операции, которые RLS и так правильно ограничивает).
 async function dbw(q,reload){
   const {data,error}=await q;
   if(error){ toastErr(error); return {error}; }
-  if(reload!==false) await refresh(reload||TBL);
+  if(reload!==false) await refresh(reload||myTbl());
   return {data};
 }
 function applyTheme(){
@@ -1998,6 +2041,9 @@ function screenHome(){
     <div class="stat"><div class="k">${t('machStock')}</div><div class="v" style="color:var(--steel)">${machCnt} <small>${t('units')}</small></div><div class="d">${DB.models.length} ${L==='ru'?'моделей':'model'}</div></div>
     <button class="stat" style="text-align:left" data-act="go" data-v="clients"><div class="k">${t('debts')}</div><div class="v" style="color:${debts?'var(--warn)':'var(--ink)'}">${short(debts)}</div><div class="d">${myClients().filter(c=>c.debt>0).length} ${L==='ru'?'клиентов':'mijoz'}</div></button>
   </div>
+  ${can('settings')&&loanOverdueN()>0?`<div class="list" style="margin-top:4px"><button class="row" data-act="go" data-v="loans">
+    <div class="tile" style="background:var(--bad-soft);color:var(--bad)">${ic('alert')}</div>
+    <div class="grow"><div class="t" style="color:var(--bad)">${esc(t('loanOverdueCard'))} ${esc(loanOverdueN())}</div></div>${ic('chev','chev')}</button></div>`:''}
   ${can('expenses')?(()=>{
     const cardT=cardTransferTotals();
     const blocks=[
@@ -3791,6 +3837,9 @@ function screenMore(){
     {v:'pendings',ic:'chart',t:t('pendings'),s:wn?wn+' '+t('waiting').toLowerCase()+' · '+short(waitSum()):t('allReceived')},
     {v:'discounts',ic:'alert',t:t('approvals'),s:((DB.sales.filter(s=>s.discStatus==='pending').length||0)+((DB.writeoffs||[]).filter(w=>w.status==='pending').length||0)+((DB.invAlerts||[]).filter(a=>a.status==='open').length||0)+((DB.partAlerts||[]).filter(a=>a.status==='open').length||0)+((DB.staffDebts||[]).filter(d=>d.status==='open').length||0)+((DB.remits||[]).filter(r=>r.status==='pending').length||0))+' '+t('pending').toLowerCase(),need:'approve'},
     {v:'branches',ic:'wh',t:t('branchesTab'),s:'',need:'allBranches'},
+    // v26.72: «Долги» — займы вне продаж (нам должны / мы должны), только Владелец
+    ...(can('settings')?[{v:'loans',ic:'wallet',t:esc(t('loansTab')),s:(()=>{ const n=loanOverdueN(), o=(DB.loans||[]).filter(l=>l.status==='open').length;
+      return n?esc(t('overdue'))+': '+n:(o?o+' '+esc(t('loanOpen').toLowerCase()):''); })(),need:'settings'}]:[]),
     {v:'sellers',ic:'users',t:t('sellersBtn'),s:'',need:'settings'},
     {v:'suppliers',ic:'truck',t:t('suppliers'),s:'',need:'cost'},
     {v:'purchases',ic:'box',t:t('purchases'),s:'',need:'cost'},
@@ -3828,6 +3877,151 @@ function screenMore(){
   <div class="list" style="margin-top:10px">${its.filter(i=>!i.need||can(i.need)).map(i=>`<button class="row" data-act="${i.act||'go'}" data-v="${i.v||''}">
     <div class="tile">${ic(i.ic)}</div><div class="grow"><div class="t">${i.t}</div>${i.s?`<div class="s">${i.s}</div>`:''}</div>${ic('chev','chev')}</button>`).join('')}</div>
   <div class="btns" style="margin-top:22px"><button class="btn ghost" data-act="logout">${t('exit')}</button></div>`;
+}
+
+/* ---- v26.72: ДОЛГИ (только Владелец) — loans / loan_payments ---- */
+let LOANDIR='to_us', LOANF='open', LOANUNDO=null, LOANCANCEL=false;
+const ymdLocal=(d)=>{ d=d||new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+const ymdFmt=s=>/^\d{4}-\d{2}-\d{2}/.test(s||'')?s.slice(8,10)+'.'+s.slice(5,7)+'.'+s.slice(0,4):'—';
+const tsFmtFull=ts=>ts?new Date(ts).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'}):'—';
+const fmtCur=(n,cur)=>cur==='USD'?'$'+fmt2(n):fmt(n)+' '+t('sumCur');
+// срочность открытого долга: 0 — просрочен, 1 — вернуть сегодня/завтра, 2 — остальные открытые, 3 — закрыт/отменён
+function loanUrg(l){
+  if(l.status!=='open') return 3;
+  if(!l.dueDate) return 2;
+  const td=ymdLocal(), tm=ymdLocal(new Date(Date.now()+dayMs));
+  if(l.dueDate<td) return 0;
+  if(l.dueDate===td||l.dueDate===tm) return 1;
+  return 2;
+}
+const loanOverdueN=()=>(DB.loans||[]).filter(l=>loanUrg(l)===0).length;
+function loanSort(a,b){
+  const u=loanUrg(a)-loanUrg(b); if(u) return u;
+  const da=a.dueDate||'9999-99-99', db=b.dueDate||'9999-99-99';
+  if(da!==db) return da<db?-1:1;
+  return b.createdAt-a.createdAt;
+}
+const loanStPill=l=>l.status==='closed'?`<span class="pill ok">${esc(t('loanClosedSt'))}</span>`
+  :l.status==='cancelled'?`<span class="pill">${esc(t('loanCancelledSt'))}</span>`
+  :loanUrg(l)===0?`<span class="pill bad">${esc(t('overdue'))}</span>`
+  :loanUrg(l)===1?`<span class="pill warn">${esc(l.dueDate===ymdLocal()?t('loanToday'):t('loanTomorrow'))}</span>`
+  :`<span class="pill">${esc(t('loanOpenSt'))}</span>`;
+const loanBar=l=>{ const pct=l.amount>0?Math.min(100,Math.round(l.paid/l.amount*100)):0;
+  return `<div style="height:5px;border-radius:3px;background:var(--surface-2);margin-top:6px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--accent)"></div></div>`; };
+function loanRow(l){
+  const u=loanUrg(l), col=u===0?'var(--bad)':u===1?'var(--warn)':'var(--ink)';
+  return `<button class="row" data-act="loanOpen" data-id="${esc(l.id)}" style="align-items:flex-start${u===0?';border-color:var(--bad)':''}">
+    <div class="grow"><div class="t" style="color:${col}">${esc(l.person)}</div>
+      ${l.phone?`<div class="s mono">${esc(l.phone)}</div>`:''}
+      <div class="s">${esc(t('loanTook'))} ${esc(ymdFmt(l.takenDate))}${l.dueDate?' · '+esc(t('loanReturnBy'))+' '+esc(ymdFmt(l.dueDate)):''}</div>
+      <div class="s mono">${esc(t('loanAmount'))} ${esc(fmtCur(l.amount,l.cur))} · ${esc(t('loanPaid'))} ${esc(fmtCur(l.paid,l.cur))}</div>
+      ${loanBar(l)}</div>
+    <div class="r"><div class="t" style="color:${col}">${esc(fmtCur(l.rem,l.cur))}</div><div class="s">${loanStPill(l)}</div></div></button>`;
+}
+function screenLoans(){
+  const back=`<button class="iconbtn" data-act="go" data-v="more">${ic('back')}</button>`;
+  if(!LOANS_OK) return header(t('loansTab'),null,back)+`<div class="empty">${esc(t('loanNotReady'))}</div>`;
+  const mine=(DB.loans||[]).filter(l=>l.direction===LOANDIR);
+  const open=mine.filter(l=>l.status==='open');
+  const totUZS=open.filter(l=>l.cur==='UZS').reduce((a,l)=>a+l.rem,0), totUSD=open.filter(l=>l.cur==='USD').reduce((a,l)=>a+l.rem,0);
+  const list=mine.filter(l=>LOANF==='all'||(LOANF==='open'?l.status==='open':l.status!=='open')).sort(loanSort);
+  const chip=(v,lbl)=>`<button class="${LOANF===v?'on':''}" data-act="loanF" data-v="${v}">${esc(lbl)}</button>`;
+  // «Клиенты за товар»: продажи в долг (только чтение; оплата — существующим окном клиента, rpc_pay_client_debt)
+  let goods='';
+  if(LOANDIR==='to_us'&&LOANF!=='closed'){
+    const ss=(DB.sales||[]).filter(s=>(s.debtLeft||0)>0&&s.status!=='returned')
+      .sort((a,b)=>(dueOf(a)||Infinity)-(dueOf(b)||Infinity)||a.at-b.at);
+    const gTot=ss.reduce((a,s)=>a+(s.debtLeft||0),0);
+    if(ss.length) goods=`<div class="sec-t">${esc(t('loanClientsGoods'))} <span class="mono" style="font-weight:600">${esc(fmtCur(gTot,'UZS'))}</span></div>
+    <div class="list">${ss.map(s=>{ const c=s.clientId?cli(s.clientId):null, od=isOverdue(s), due=dueOf(s);
+      return `<div class="row" style="align-items:flex-start">
+        <div class="grow"><div class="t" style="color:${od?'var(--bad)':'var(--ink)'}">${esc(c?c.name:'—')}</div>
+          <div class="s">${esc(t('loanSaleOn'))} №${esc(s.number)} · ${esc(tsFmtFull(s.at))}${due?' · '+esc(t('loanReturnBy'))+' '+esc(tsFmtFull(due)):''}</div>
+          ${c?`<button class="btn ghost sm" style="margin-top:6px;width:auto" data-act="client" data-id="${esc(c.id)}">${esc(t('loanAcceptPay'))}</button>`:''}</div>
+        <div class="r"><div class="t" style="color:${od?'var(--bad)':'var(--warn)'}">${esc(fmtCur(s.debtLeft,'UZS'))}</div></div></div>`; }).join('')}</div>`;
+  }
+  return header(t('loansTab'),null,back)+`
+  <div class="seg" style="margin-top:12px"><button class="${LOANDIR==='to_us'?'on':''}" data-act="loanDir" data-v="to_us">${esc(t('loansToUs'))}</button>
+    <button class="${LOANDIR==='from_us'?'on':''}" data-act="loanDir" data-v="from_us">${esc(t('loansFromUs'))}</button></div>
+  <div class="stats">
+    <div class="stat"><div class="k">${esc(t('loanRemain'))} · ${esc(t('sumCur'))}</div><div class="v">${esc(short(totUZS))}</div><div class="d">${esc(open.filter(l=>l.cur==='UZS').length)} ${esc(t('loanOpenDebts').toLowerCase())}</div></div>
+    <div class="stat"><div class="k">${esc(t('loanRemain'))} · $</div><div class="v">$${esc(fmt2(totUSD))}</div><div class="d">${esc(open.filter(l=>l.cur==='USD').length)} ${esc(t('loanOpenDebts').toLowerCase())}</div></div>
+  </div>
+  <div class="chips">${chip('open',t('loanOpen'))}${chip('closed',t('loanClosed'))}${chip('all',t('loanAll'))}</div>
+  <div class="btns" style="padding-top:0"><button class="btn sm" data-act="loanNew">${ic('plus')} ${esc(t('loanNew'))}</button></div>
+  <div class="list">${list.length?list.map(loanRow).join(''):`<div class="empty">${esc(t('loanEmpty'))}</div>`}</div>
+  ${goods}`;
+}
+function sheetLoan(id){
+  const l=(DB.loans||[]).find(x=>x.id===id);
+  if(!l) return `<div class="sheet-hd"><h3>${esc(t('loansTab'))}</h3><button class="iconbtn" data-act="close">${ic('x')}</button></div><div class="empty">${esc(t('nothing'))}</div>`;
+  const live=l.status!=='cancelled';
+  return `<div class="sheet-hd"><h3>${esc(l.person)}</h3><button class="iconbtn" data-act="close">${ic('x')}</button></div>
+  <div class="pad" style="color:var(--ink-3);font-size:13px">${esc(l.direction==='to_us'?t('loansToUs'):t('loansFromUs'))} · ${loanStPill(l)}</div>
+  <div class="stats" style="padding-top:4px">
+    <div class="stat"><div class="k">${esc(t('loanAmount'))}</div><div class="v">${esc(fmtCur(l.amount,l.cur))}</div></div>
+    <div class="stat"><div class="k">${esc(t('loanPaid'))}</div><div class="v" style="color:var(--accent)">${esc(fmtCur(l.paid,l.cur))}</div></div>
+    <div class="stat wide"><div class="k">${esc(t('loanRemain'))}</div><div class="v" style="color:${loanUrg(l)===0?'var(--bad)':'var(--ink)'}">${esc(fmtCur(l.rem,l.cur))}</div>${loanBar(l)}</div>
+  </div>
+  <div class="list">
+    ${l.phone?`<div class="row"><div class="grow"><div class="s">${esc(t('phone'))}</div><div class="t mono">${esc(l.phone)}</div></div></div>`:''}
+    <div class="row"><div class="grow"><div class="s">${esc(t('loanTakenAt'))}</div><div class="t">${esc(ymdFmt(l.takenDate))}</div></div>
+      <div class="r"><div class="s">${esc(t('loanDueAt'))}</div><div class="t">${esc(ymdFmt(l.dueDate))}</div></div></div>
+    ${l.comment?`<div class="row"><div class="grow"><div class="s">${esc(t('comment'))}</div><div class="t" style="white-space:pre-wrap;font-weight:400">${esc(l.comment)}</div></div></div>`:''}
+  </div>
+  <div class="sec-t">${esc(t('loanPays'))}</div>
+  <div class="list">${l.pays.length?l.pays.map(p=>`<div class="row">
+    <div class="grow"><div class="t mono">${esc(fmtCur(p.amount,l.cur))}</div><div class="s">${esc(ymdFmt(p.paidDate))}${p.comment?' · '+esc(p.comment):''}</div>
+      ${LOANUNDO===p.id?`<div style="display:flex;align-items:center;gap:8px;margin-top:6px"><span class="s">${esc(t('loanUndoAsk'))}</span>
+        <button class="btn sm" style="width:auto" data-act="loanUndoYes" data-id="${esc(p.id)}">${esc(t('loanYes'))}</button>
+        <button class="btn ghost sm" style="width:auto" data-act="loanUndoNo">${esc(t('loanNo'))}</button></div>`:''}</div>
+    ${live&&LOANUNDO!==p.id?`<button class="btn ghost sm" style="width:auto;flex:none" data-act="loanUndo" data-id="${esc(p.id)}">${esc(t('loanUndo'))}</button>`:''}</div>`).join('')
+    :`<div class="empty">${esc(t('loanNoPays'))}</div>`}</div>
+  ${live?`<div class="btns" style="margin-top:14px">
+    ${l.status==='open'?`<button class="btn" data-act="loanPayForm" data-id="${esc(l.id)}">${ic('plus')} ${esc(t('loanAddPay'))}</button>`:''}
+    <button class="btn ghost" data-act="loanEdit" data-id="${esc(l.id)}">${esc(t('loanEdit'))}</button></div>
+  ${LOANCANCEL?`<div class="pad" style="font-size:13px">${esc(t('loanCancelAsk'))}</div>
+    <div class="btns"><button class="btn" style="background:var(--bad)" data-act="loanCancelYes" data-id="${esc(l.id)}">${esc(t('loanYes'))}</button>
+      <button class="btn ghost" data-act="loanCancelNo">${esc(t('loanNo'))}</button></div>`
+    :`<div class="btns" style="margin-top:8px"><button class="btn ghost sm" style="color:var(--bad)" data-act="loanCancel">${esc(t('loanCancel'))}</button></div>`}`:''}`;
+}
+// Форма долга: id — изменение существующего, иначе новый (направление — текущая вкладка)
+function sheetLoanForm(id){
+  const l=id?(DB.loans||[]).find(x=>x.id===id):null;
+  const d=l||{direction:LOANDIR,person:'',phone:'',amount:'',cur:'UZS',takenDate:ymdLocal(),dueDate:'',comment:''};
+  const opt=(v,lbl,cur)=>`<option value="${v}" ${cur===v?'selected':''}>${esc(lbl)}</option>`;
+  return `<div class="sheet-hd"><h3>${esc(l?t('loanEdit'):t('loanNew'))}</h3><button class="iconbtn" data-act="${l?'loanOpen':'close'}" data-id="${l?esc(l.id):''}">${ic('x')}</button></div>
+  <div class="fld" style="padding-top:14px"><label>${esc(t('loanDir'))}</label><select class="inp" id="ln_dir">
+    ${opt('to_us',t('loansToUs'),d.direction)}${opt('from_us',t('loansFromUs'),d.direction)}</select></div>
+  <div class="fld"><label>${esc(t('loanPerson'))} *</label><input class="inp" id="ln_person" maxlength="120" value="${esc(d.person)}" autocomplete="off"></div>
+  <div class="fld"><label>${esc(t('phone'))}</label><input class="inp mono" id="ln_phone" maxlength="40" inputmode="tel" placeholder="+998" value="${esc(d.phone)}"></div>
+  <div class="fld"><label>${esc(t('loanAmount'))} *</label><input class="inp num" id="ln_amount" inputmode="decimal" value="${esc(d.amount)}"></div>
+  <div class="fld"><label>${esc(t('loanCur'))}</label><select class="inp" id="ln_cur">${opt('UZS',t('sumCur'),d.cur)}${opt('USD','USD ($)',d.cur)}</select></div>
+  <div class="fld"><label>${esc(t('loanTakenAt'))} *</label><input class="inp" type="date" id="ln_taken" value="${esc(d.takenDate)}"></div>
+  <div class="fld"><label>${esc(t('loanDueAt'))}</label><input class="inp" type="date" id="ln_due" value="${esc(d.dueDate)}"></div>
+  <div class="fld"><label>${esc(t('comment'))}</label><textarea class="inp" id="ln_cm" maxlength="1000" rows="2">${esc(d.comment)}</textarea></div>
+  <div class="btns"><button class="btn" data-act="loanSave" data-id="${l?esc(l.id):''}">${esc(t('save'))}</button></div>`;
+}
+function sheetLoanPay(id){
+  const l=(DB.loans||[]).find(x=>x.id===id); if(!l) return sheetLoan(id);
+  return `<div class="sheet-hd"><h3>${esc(t('loanAddPay'))}</h3><button class="iconbtn" data-act="loanOpen" data-id="${esc(l.id)}">${ic('x')}</button></div>
+  <div class="pad" style="color:var(--ink-3);font-size:13.5px">${esc(l.person)} · ${esc(t('loanRemain'))} ${esc(fmtCur(l.rem,l.cur))}</div>
+  <div class="fld"><label>${esc(t('loanAmount'))} (${esc(l.cur==='USD'?'$':t('sumCur'))}) *</label><input class="inp num" id="lp_amount" inputmode="decimal" value="${esc(l.rem)}"></div>
+  <div class="fld"><label>${esc(t('loanPayDate'))} *</label><input class="inp" type="date" id="lp_date" value="${esc(ymdLocal())}"></div>
+  <div class="fld"><label>${esc(t('comment'))}</label><input class="inp" id="lp_cm" maxlength="1000"></div>
+  <div class="btns"><button class="btn" data-act="loanPaySave" data-id="${esc(l.id)}">${esc(t('save'))}</button></div>`;
+}
+const loanErr=k=>{ toast('⚠ '+t(k)); return null; };
+function loanFormRead(old){
+  const g=i=>(document.getElementById(i)||{}).value||'';
+  const person=g('ln_person').trim(), amount=moneyIn(g('ln_amount')), taken=g('ln_taken'), due=g('ln_due');
+  if(!person||person.length>120) return loanErr('loanErrPerson');
+  if(!(amount>0)) return loanErr('loanErrAmount');
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(taken)) return loanErr('loanErrDate');
+  if(due&&due<taken) return loanErr('loanErrDue');
+  if(old&&amount<old.paid) return loanErr('loanErrBelowPaid');
+  const dir=g('ln_dir')==='from_us'?'from_us':'to_us', cur=g('ln_cur')==='USD'?'USD':'UZS';
+  return {direction:dir,person,phone:g('ln_phone').trim()||null,amount,cur,taken_at:taken,due_at:due||null,comment:g('ln_cm').trim()||null};
 }
 
 function screenClients(){
@@ -5732,6 +5926,7 @@ function render(){
     case 'docsContracts': b=can('settings')?screenDocsContracts():`<div class="empty">${t('noAccess')}</div>`; break;
     case 'more': b=screenMore(); break;
     case 'clients': b=screenClients(); break;
+    case 'loans': b=can('settings')?screenLoans():`<div class="empty">${t('noAccess')}</div>`; break;
     case 'suppliers': b=can('cost')?screenSuppliers():`<div class="empty">${t('noAccess')}</div>`; break;
     case 'firms': b=screenFirms(); break;
     case 'purchases': b=can('cost')?screenPurchases():`<div class="empty">${t('noAccess')}</div>`; break;
@@ -6447,6 +6642,48 @@ document.addEventListener('click',e=>{
   if(a==='shipOk'){
     const [saleId,entryId]=id.split('|');
     rpc('rpc_ship_done',{p_sale:saleId,p_entry:entryId||''},['sales']).then(({error})=>{ if(!error){ toast(t('shipDoneBtn')); render(); } });
+    return; }
+  // v26.72: «Долги» — только Владелец (can('settings')); запись — напрямую в loans (RLS: только админ) и через rpc_loan_*
+  if(a&&a.indexOf('loan')===0&&!can('settings')){ toast(t('noAccess')); return; }
+  if(a==='loanDir'){ LOANDIR=el.dataset.v==='from_us'?'from_us':'to_us'; render(); return; }
+  if(a==='loanF'){ LOANF=['open','closed','all'].includes(el.dataset.v)?el.dataset.v:'open'; render(); return; }
+  if(a==='loanOpen'){ LOANUNDO=null; LOANCANCEL=false; SHEET=()=>sheetLoan(id); render(); return; }
+  if(a==='loanNew'){ SHEET=()=>sheetLoanForm(null); render(); return; }
+  if(a==='loanEdit'){ SHEET=()=>sheetLoanForm(id); render(); return; }
+  if(a==='loanPayForm'){ SHEET=()=>sheetLoanPay(id); render(); return; }
+  if(a==='loanUndo'){ LOANUNDO=id; render(); return; }
+  if(a==='loanUndoNo'){ LOANUNDO=null; render(); return; }
+  if(a==='loanCancel'){ LOANCANCEL=true; render(); return; }
+  if(a==='loanCancelNo'){ LOANCANCEL=false; render(); return; }
+  if(a==='loanSave'){
+    const old=id?(DB.loans||[]).find(x=>x.id===id):null; if(id&&(!old||old.status==='cancelled')) return;
+    const v=loanFormRead(old); if(!v) return;
+    if(BUSY) return; BUSY=true;
+    const q=old?SB.from('loans').update(v).eq('id',old.id).select('id'):SB.from('loans').insert(v).select('id');
+    dbw(q,OWNER_TBL).then(({data,error})=>{ BUSY=false; if(error) return;
+      const nid=old?old.id:(data&&data[0]&&data[0].id);
+      LOANDIR=v.direction; LOANUNDO=null; LOANCANCEL=false; SHEET=nid?()=>sheetLoan(nid):null; toast(t('saved')); });
+    return; }
+  if(a==='loanPaySave'){
+    const l=(DB.loans||[]).find(x=>x.id===id); if(!l||l.status!=='open') return;
+    const g=i=>(document.getElementById(i)||{}).value||'';
+    const amt=moneyIn(g('lp_amount')), dt=g('lp_date'), cm=g('lp_cm').trim();
+    if(!(amt>0)){ loanErr('loanErrAmount'); return; }
+    if(amt>l.rem){ loanErr('loanErrPayMax'); return; }
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(dt)){ loanErr('loanErrDate'); return; }
+    if(dt<l.takenDate){ loanErr('loanErrPayDate'); return; }
+    if(BUSY) return; BUSY=true;
+    rpc('rpc_loan_pay',{p_loan:l.id,p_amount:amt,p_paid_at:dt,p_comment:cm||null},OWNER_TBL).then(({error})=>{ BUSY=false; if(error) return;
+      LOANUNDO=null; SHEET=()=>sheetLoan(l.id); toast(t('saved')); });
+    return; }
+  if(a==='loanUndoYes'){
+    if(BUSY) return; BUSY=true;
+    rpc('rpc_loan_payment_undo',{p_payment:id},OWNER_TBL).then(({error})=>{ BUSY=false; LOANUNDO=null; if(!error) toast(t('saved')); render(); });
+    return; }
+  if(a==='loanCancelYes'){
+    const l=(DB.loans||[]).find(x=>x.id===id); if(!l||l.status==='cancelled') return;
+    if(BUSY) return; BUSY=true;
+    dbw(SB.from('loans').update({status:'cancelled'}).eq('id',l.id),OWNER_TBL).then(({error})=>{ BUSY=false; LOANCANCEL=false; if(!error) toast(t('saved')); render(); });
     return; }
   if(a==='client'){ const c=cli(id); if(c){DEBTPAY={method:'cash',photo:'',amount:c.debt};SHEET=()=>sheetClient(c);render();} return; }
   if(a==='debtPayM'){ DEBTPAY.method=el.dataset.v; render(); return; }
